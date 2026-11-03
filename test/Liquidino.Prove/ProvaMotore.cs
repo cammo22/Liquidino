@@ -32,11 +32,12 @@ public class ProvaMotore
         };
         var registro = new Registro(dati);
         var regista = new Regista(imp, registro, dati);
+        using var tempo = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
         {
             Assert.True(regista.MotorePresente, regista.Riassunto());
             Assert.True(regista.Presente(RuoloModello.Mani), regista.Riassunto());
-            var acceso = await regista.Assicura(new[] { RuoloModello.Mani }, CancellationToken.None);
+            var acceso = await regista.Assicura(new[] { RuoloModello.Mani }, tempo.Token);
             Assert.True(acceso, regista.UltimoErrore ?? "caricamento fallito senza dettaglio");
             Assert.Contains(RuoloModello.Mani, regista.Accesi);
 
@@ -46,10 +47,10 @@ public class ProvaMotore
                 Array.Empty<(string, string)>(),
                 "Di' ciao.",
                 null, null, null, null,
-                0, 16, true), CancellationToken.None);
+                0, 16, true), tempo.Token);
             Assert.False(string.IsNullOrWhiteSpace(risp?.Testo), "la chat è tornata vuota");
 
-            await regista.ScaricaTutto(CancellationToken.None);
+            await regista.ScaricaTutto(tempo.Token);
             Assert.DoesNotContain(RuoloModello.Mani, regista.Accesi);
 
             var giornale = Directory.GetFiles(Percorsi.Registro(dati), "*.jsonl").Single();

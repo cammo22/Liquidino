@@ -104,8 +104,13 @@ public sealed class Regista : IRegista
             };
             using var p = Process.Start(si);
             if (p is null) return;
-            var testo = p.StandardOutput.ReadToEnd();
-            if (!p.WaitForExit(2000)) return;
+            var letto = p.StandardOutput.ReadToEndAsync();
+            if (!p.WaitForExit(3000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
+                return;
+            }
+            var testo = letto.Wait(1000) ? letto.Result : "";
             var ago = ":" + porta;
             foreach (var riga in testo.Split('\n'))
             {

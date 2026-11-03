@@ -16,7 +16,8 @@ if ($LASTEXITCODE -ne 0) { throw "download llama.cpp" }
 $zipScaricato = Join-Path $lavoro $nome
 Expand-Archive -Path $zipScaricato -DestinationPath (Join-Path $lavoro "llama") -Force
 $exe = Get-ChildItem (Join-Path $lavoro "llama") -Recurse -Filter "llama-server.exe" | Select-Object -First 1
-if (-not $exe) { throw "llama-server.exe non c'è nello zip" }
+if (-not $exe) { $exe = Get-ChildItem (Join-Path $lavoro "llama") -Recurse -Filter "llama.exe" | Select-Object -First 1 }
+if (-not $exe) { throw "nello zip non c'è llama-server.exe né llama.exe" }
 # il regista cerca llama-server.exe entro tre livelli dalla cartella del motore
 if ($exe.DirectoryName -ne (Join-Path $lavoro "llama")) {
   Copy-Item (Join-Path $exe.DirectoryName "*") (Join-Path $lavoro "llama") -Force
@@ -24,7 +25,7 @@ if ($exe.DirectoryName -ne (Join-Path $lavoro "llama")) {
 
 $gguf = Join-Path $lavoro "modelli\prova-1.7.gguf"
 Write-Host "Scarico un GGUF piccolo solo per questa prova"
-curl.exe -fL --retry 3 -A "Liquidino-CI" -o $gguf "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf"
+curl.exe -fL --retry 3 --max-time 180 -A "Liquidino-CI" -o $gguf "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf"
 if ($LASTEXITCODE -ne 0) { throw "download GGUF" }
 if ((Get-Item $gguf).Length -lt 100000) { throw "il GGUF è troppo piccolo, il download non è riuscito" }
 
