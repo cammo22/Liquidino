@@ -46,10 +46,10 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           $PSNativeCommandUseErrorActionPreference = $false
-          gh release view v0.1.0-prova
+          gh release view v0.1.1-prova
           if ($LASTEXITCODE -ne 0) {
-            gh release create v0.1.0-prova Liquidino-win-x64.zip --title "Liquidino 0.1.0 (prova)" --notes-file NOTE-RELEASE.md --prerelease
+            gh release create v0.1.1-prova Liquidino-win-x64.zip --title "Liquidino 0.1.1 (prova)" --notes-file NOTE-RELEASE.md --prerelease
           } else {
-            gh release upload v0.1.0-prova Liquidino-win-x64.zip --clobber
+            gh release upload v0.1.1-prova Liquidino-win-x64.zip --clobber
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

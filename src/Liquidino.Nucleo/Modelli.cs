@@ -103,7 +103,7 @@ public static class RilevatoreModelli
     /// <summary>Argomenti del processo. Il router non carica nessun modello finché non glielo chiediamo, e mai più di due.</summary>
     public static string Argomenti(string eseguibile, int porta, string preset)
     {
-        var coda = $"--host 127.0.0.1 --port {porta} --models-preset \"{preset}\" --models-max 2 --no-models-autoload";
+        var coda = $"--host 127.0.0.1 --port {porta} --models-preset \"{preset}\" --models-max 2 --no-models-autoload --offline";
         return EServerDedicato(eseguibile) ? coda : "serve " + coda;
     }
 
@@ -263,9 +263,61 @@ public static class PresetMotore
             }
             righe.Add("");
         }
-        var testo = string.Join(Environment.NewLine, righe);
+        var testo = SenzaRete(string.Join(Environment.NewLine, righe));
         File.WriteAllText(percorsoIni, testo);
         return testo;
+    }
+
+    /// <summary>Toglie hf-repo, indirizzi e sezioni che non sono file locali. Il motore non deve scaricare nulla.</summary>
+    public static string SenzaRete(string testo)
+    {
+        var righe = (testo ?? "").Replace("\r\n", "\n").Split('\n');
+        var uscita = new List<string>();
+        var blocco = new List<string>();
+        string? titolo = null;
+
+        void Chiudi()
+        {
+            if (titolo is null)
+            {
+                uscita.AddRange(blocco.Where(RigaLocale));
+            }
+            else if (SezioneLocale(titolo))
+            {
+                uscita.Add("[" + titolo + "]");
+                uscita.AddRange(blocco.Where(RigaLocale));
+            }
+            blocco.Clear();
+        }
+
+        foreach (var riga in righe)
+        {
+            var t = riga.Trim();
+            if (t.StartsWith('[') && t.EndsWith(']') && t.Length > 2)
+            {
+                Chiudi();
+                titolo = t[1..^1].Trim();
+                continue;
+            }
+            blocco.Add(riga);
+        }
+        Chiudi();
+        return string.Join(Environment.NewLine, uscita).TrimEnd() + Environment.NewLine;
+    }
+
+    static bool SezioneLocale(string titolo) =>
+        !titolo.Contains('/')
+        && !titolo.Contains("hf-repo", StringComparison.OrdinalIgnoreCase)
+        && !titolo.Contains("huggingface", StringComparison.OrdinalIgnoreCase);
+
+    static bool RigaLocale(string riga)
+    {
+        var t = riga.TrimStart();
+        if (t.StartsWith("hf-repo", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.StartsWith("hf-file", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.Contains("huggingface.co", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.Contains("http://", StringComparison.OrdinalIgnoreCase) || t.Contains("https://", StringComparison.OrdinalIgnoreCase)) return false;
+        return true;
     }
 
     static string PerIni(string percorso) => percorso.Replace('\\', '/');

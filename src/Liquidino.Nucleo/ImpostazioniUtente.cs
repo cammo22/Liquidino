@@ -94,13 +94,18 @@ public sealed class ImpostazioniUtente
         return imp;
     }
 
+    readonly object _scrittura = new();
+
     public void Salva()
     {
         if (string.IsNullOrWhiteSpace(PercorsoFile))
             PercorsoFile = Percorsi.FileImpostazioni();
-        Directory.CreateDirectory(Path.GetDirectoryName(PercorsoFile)!);
         var json = JsonSerializer.Serialize(this, JsonIo.Opzioni);
-        File.WriteAllText(PercorsoFile, json);
+        lock (_scrittura)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(PercorsoFile)!);
+            File.WriteAllText(PercorsoFile, json);
+        }
     }
 }
 

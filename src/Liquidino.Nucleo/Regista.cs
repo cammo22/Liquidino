@@ -32,6 +32,7 @@ public sealed class Regista : IRegista
     Process? _processo;
     ClienteLlama? _cliente;
     bool _avviatoDaNoi;
+    CancellationTokenSource _operazioni = new();
 
     public Regista(ImpostazioniUtente imp, Registro registro, string? radiceDati = null)
     {
@@ -54,10 +55,34 @@ public sealed class Regista : IRegista
 
     public void Rileggi() => _rilevazione = RilevatoreModelli.Cerca(_imp.CartellaMotore);
 
+    public void AnnullaOperazioni()
+    {
+        var nuovo = new CancellationTokenSource();
+        var vecchio = Interlocked.Exchange(ref _operazioni, nuovo);
+        try { vecchio.Cancel(); } catch { /* già annullato */ }
+    }
+
+    public void UccidiSubito()
+    {
+        AnnullaOperazioni();
+        try
+        {
+            if (_processo is { HasExited: false }) _processo.Kill(entireProcessTree: true);
+        }
+        catch { /* già chiuso */ }
+        try { _cliente?.Dispose(); } catch { /* già chiuso */ }
+        _cliente = null;
+        _processo = null;
+        _avviatoDaNoi = false;
+        _accesi.Clear();
+    }
+
     public async Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)
     {
-        await _porta.WaitAsync(ct);
-        try { return await AssicuraInterno(ruoli, ct); }
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return false;
+        try { return await AssicuraInterno(ruoli, legati.Token).ConfigureAwait(false); }
         finally { _porta.Release(); }
     }
 
@@ -80,62 +105,68 @@ public sealed class Regista : IRegista
 
     public async Task ScaricaTutto(CancellationToken ct)
     {
-        await _porta.WaitAsync(ct);
+        using var tempo = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        tempo.CancelAfter(ClienteLlama.TempoScarico + TimeSpan.FromSeconds(2));
+        var preso = false;
         try
         {
+            preso = await _porta.WaitAsync(TimeSpan.FromSeconds(2), tempo.Token).ConfigureAwait(false);
+            if (!preso) return;
             foreach (var r in _accesi.ToList())
-                await ScaricaUno(r, ct);
+                await ScaricaUno(r, tempo.Token).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) { /* lo STOP ha chiuso il tempo */ }
         catch (Exception e) { _registro.SegnaErrore("scarico: " + e.Message); }
-        finally { _porta.Release(); }
+        finally { if (preso) _porta.Release(); }
     }
 
     public async Task Ferma()
     {
-        try { await ScaricaTutto(CancellationToken.None); } catch { /* il processo sta per chiudersi */ }
-        if (_avviatoDaNoi && _processo is { HasExited: false })
-        {
-            try { _processo.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
-            _registro.Scrivi("motore", "llama-server fermato", "ok");
-        }
-        _cliente?.Dispose();
-        _cliente = null;
-        _processo = null;
-        _avviatoDaNoi = false;
+        AnnullaOperazioni();
+        try { await ScaricaTutto(CancellationToken.None).ConfigureAwait(false); }
+        catch { /* si chiude comunque */ }
+        UccidiSubito();
+        _registro.Scrivi("motore", "llama-server fermato", "ok");
     }
 
     public async Task<SceltaAzione?> Decidi(string stato, CatalogoAzioni catalogo, CancellationToken ct)
     {
-        await _porta.WaitAsync(ct);
-        try { return await DecidiInterno(stato, catalogo, ct); }
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return null;
+        try { return await DecidiInterno(stato, catalogo, legati.Token).ConfigureAwait(false); }
         finally { _porta.Release(); }
     }
 
     async Task<SceltaAzione?> DecidiInterno(string stato, CatalogoAzioni catalogo, CancellationToken ct)
     {
         if (_cliente is null || !Presente(RuoloModello.D1)) return null;
-        var json = await _cliente.Decidi(NomiModello.IdDi(RuoloModello.D1), stato, catalogo, ct);
+        var json = await _cliente.Decidi(NomiModello.IdDi(RuoloModello.D1), stato, catalogo, ct).ConfigureAwait(false);
         return LettoreDecisione.Leggi(json, catalogo.Azioni.Select(a => a.Nome).ToList());
     }
 
     public async Task<RispostaChat?> Completa(RichiestaChat richiesta, CancellationToken ct)
     {
-        await _porta.WaitAsync(ct);
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return null;
         try
         {
             if (_cliente is null) return null;
-            return await _cliente.Chat(NomiModello.IdDi(richiesta.Modello), richiesta, ct);
+            return await _cliente.Chat(NomiModello.IdDi(richiesta.Modello), richiesta, legati.Token).ConfigureAwait(false);
         }
         finally { _porta.Release(); }
     }
 
     public async Task<string?> Trascrivi(byte[] wav, CancellationToken ct)
     {
-        await _porta.WaitAsync(ct);
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return null;
         try
         {
             if (!Presente(RuoloModello.Omni)) return null;
-            if (!await AssicuraInterno([RuoloModello.Omni], ct)) return null;
+            if (!await AssicuraInterno([RuoloModello.Omni], legati.Token).ConfigureAwait(false)) return null;
             var b64 = Convert.ToBase64String(wav);
             if (_cliente is null) return null;
             var risp = await _cliente.Chat(NomiModello.IdDi(RuoloModello.Omni), new RichiestaChat(
@@ -149,7 +180,7 @@ public sealed class Regista : IRegista
                 null,
                 0,
                 200,
-                true), ct);
+                true), legati.Token).ConfigureAwait(false);
             var testo = Testo.PulisciRisposta(risp.Testo);
             return string.IsNullOrWhiteSpace(testo) ? null : testo;
         }
@@ -158,29 +189,31 @@ public sealed class Regista : IRegista
 
     public async Task<byte[]?> Sintetizza(string testo, string voce, CancellationToken ct)
     {
-        await _porta.WaitAsync(ct);
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return null;
         try
         {
             if (!Presente(RuoloModello.Omni)) return null;
-            if (!await AssicuraInterno([RuoloModello.Omni], ct) || _cliente is null) return null;
-            return await _cliente.Sintetizza(NomiModello.IdDi(RuoloModello.Omni), testo, voce, ct);
+            if (!await AssicuraInterno([RuoloModello.Omni], legati.Token).ConfigureAwait(false) || _cliente is null) return null;
+            return await _cliente.Sintetizza(NomiModello.IdDi(RuoloModello.Omni), testo, voce, legati.Token).ConfigureAwait(false);
         }
         finally { _porta.Release(); }
     }
 
     async Task<bool> Garantito(CancellationToken ct)
     {
-        if (_cliente is not null && await _cliente.Vivo(ct)) return true;
+        if (_cliente is not null && await _cliente.Vivo(ct).ConfigureAwait(false)) return true;
         _cliente?.Dispose();
         _cliente = null;
         _accesi.Clear();
         if (_rilevazione.Eseguibile is null) return false;
         var preset = Percorsi.Preset(_radiceDati);
-        PresetMotore.Scrivi(preset, Percorsi.Slot(_radiceDati), _rilevazione.Modelli, _imp);
+        await Task.Run(() => PresetMotore.Scrivi(preset, Percorsi.Slot(_radiceDati), _rilevazione.Modelli, _imp), ct).ConfigureAwait(false);
         var exe = _rilevazione.Eseguibile;
         var porta = _imp.Porta;
         _cliente = new ClienteLlama(porta);
-        if (await _cliente.Vivo(ct))
+        if (await _cliente.Vivo(ct).ConfigureAwait(false))
         {
             _registro.Scrivi("motore", "uso un llama-server già acceso sulla porta " + porta);
             return true;
@@ -207,6 +240,12 @@ public sealed class Regista : IRegista
         }
         catch { /* la cartella del motore non si lascia elencare */ }
         si.Environment["PATH"] = path;
+        // Cache vuota e niente rete: il router non deve vedere né scaricare modelli da Hugging Face.
+        var cacheVuota = Path.Combine(_radiceDati, "motore", "cache-vuota");
+        Directory.CreateDirectory(cacheVuota);
+        si.Environment["LLAMA_CACHE"] = cacheVuota;
+        si.Environment["HF_HUB_OFFLINE"] = "1";
+        si.Environment["LLAMA_ARG_OFFLINE"] = "1";
         _processo = Process.Start(si);
         if (_processo is null) return false;
         _avviatoDaNoi = true;
@@ -219,12 +258,12 @@ public sealed class Regista : IRegista
         {
             ct.ThrowIfCancellationRequested();
             if (_processo.HasExited) break;
-            if (await _cliente.Vivo(CancellationToken.None)) 
+            if (await _cliente.Vivo(ct).ConfigureAwait(false))
             {
                 _registro.Scrivi("motore", "llama-server acceso sulla porta " + porta, "ok");
                 return true;
             }
-            await Task.Delay(300, ct);
+            await Task.Delay(300, ct).ConfigureAwait(false);
         }
         _registro.SegnaErrore("llama-server non si è acceso. Guarda motore/server.log.");
         if (_avviatoDaNoi && _processo is { HasExited: false })
@@ -243,7 +282,7 @@ public sealed class Regista : IRegista
         if (_cliente is null) return false;
         var id = NomiModello.IdDi(ruolo);
         var slot = id + ".bin";
-        var ok = await _cliente.Carica(id, ct);
+        var ok = await _cliente.Carica(id, ct).ConfigureAwait(false);
         if (!ok)
         {
             _registro.SegnaErrore("non sono riuscito a caricare " + id);
@@ -253,7 +292,7 @@ public sealed class Regista : IRegista
         var fileSlot = Path.Combine(Percorsi.Slot(_radiceDati), slot);
         if (File.Exists(fileSlot))
         {
-            try { await _cliente.RipristinaSlot(id, slot, ct); }
+            try { await _cliente.RipristinaSlot(id, slot, ct).ConfigureAwait(false); }
             catch { /* lo slot vecchio può non andar bene dopo un aggiornamento del modello */ }
         }
         _registro.Scrivi("modello", "caricato " + NomiModello.Etichetta(ruolo), "ok", ruolo.ToString());
@@ -264,9 +303,9 @@ public sealed class Regista : IRegista
     {
         if (_cliente is null) { _accesi.Remove(ruolo); return; }
         var id = NomiModello.IdDi(ruolo);
-        try { await _cliente.SalvaSlot(id, id + ".bin", ct); }
+        try { await _cliente.SalvaSlot(id, id + ".bin", ct).ConfigureAwait(false); }
         catch { /* salvare lo slot è un di più: se fallisce si scarica lo stesso */ }
-        try { await _cliente.Scarica(id, ct); }
+        try { await _cliente.Scarica(id, ct).ConfigureAwait(false); }
         catch (Exception e) { _registro.SegnaErrore("scarico " + id + ": " + e.Message); }
         _accesi.Remove(ruolo);
         _registro.Scrivi("modello", "scaricato " + NomiModello.Etichetta(ruolo), "ok", ruolo.ToString());

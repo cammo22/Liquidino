@@ -4,11 +4,11 @@ Compagno da desktop per Windows. Sta sul PC, parla italiano, non va in internet 
 
 ## Avvio
 
-1. Scarica `Liquidino-win-x64.zip` dalla [release di prova](https://github.com/cammo22/Liquidino/releases/tag/v0.1.0-prova).
-2. Estrai la cartella dove vuoi (va bene il Desktop).
+1. Scarica `Liquidino-win-x64.zip` dalla [release di prova](https://github.com/cammo22/Liquidino/releases/tag/v0.1.1-prova).
+2. Estrai la cartella dove vuoi (va bene il Desktop). Chiudi la prova vecchia prima, se è ancora aperta.
 3. Doppio clic su `Liquidino.exe`.
 4. Al primo avvio scrivi il tuo nome, scegli il carattere e la voce (femminile o maschile).
-5. Clicca sull'avatar: si apre la chat e, a fianco, le sue creazioni. Tieni premuto «Parla» (o Ctrl+Spazio) per parlare.
+5. Sotto l'avatar ci sono i tasti, tutti con un clic: Parla (un clic ascolta, un altro ferma), Chat, Creazioni, Permesso, STOP, Dormi, Impostazioni. Ctrl+Spazio è la stessa cosa di Parla, non va tenuto premuto.
 
 Il cervello non è dentro lo zip. Di solito sta già in `C:\Users\cammo\LiquidinoProva` (llama.cpp e i GGUF). Se è altrove: tasto destro sull'avatar → Impostazioni, e indica la cartella. Senza quei file Liquidino si apre lo stesso, scrive note e te lo dice.
 
