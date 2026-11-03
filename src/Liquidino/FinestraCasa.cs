@@ -27,7 +27,6 @@ public sealed class FinestraCasa : Window
     };
     readonly Button _parla;
     bool _occupato;
-    bool _ascolto;
 
     public FinestraCasa(Ponte ponte, FinestraAvatar avatar)
     {
@@ -85,7 +84,7 @@ public sealed class FinestraCasa : Window
         barra.MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch { /* già rilasciato */ } };
 
         _scorrimento = new ScrollViewer { Content = _messaggi, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = Stile.Fondo };
-        _input = Stile.Campo("Scrivi qui. Invio per mandare. Ctrl+Spazio per parlare.");
+        _input = Stile.Campo("Scrivi qui. Invio per mandare. Un clic su Parla, o Ctrl+Spazio.");
         _input.KeyDown += async (_, e) =>
         {
             if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None) { e.Handled = true; await Invia(); }
@@ -94,9 +93,8 @@ public sealed class FinestraCasa : Window
         var invia = Stile.Bottone("Invia", principale: true);
         invia.Click += async (_, _) => await Invia();
         _parla = Stile.Bottone("Parla");
-        _parla.PreviewMouseLeftButtonDown += (_, e) => { _parla.CaptureMouse(); e.Handled = true; _ = IniziaAscolto(); };
-        _parla.PreviewMouseLeftButtonUp += (_, e) => { if (_parla.IsMouseCaptured) _parla.ReleaseMouseCapture(); e.Handled = true; _ = FinisciAscolto(); };
-        _parla.MouseLeave += (_, _) => { if (_ascolto && !_parla.IsMouseCaptured) _ = FinisciAscolto(); };
+        _parla.Click += (_, _) => _ponte.AlternaAscolto();
+        AggiornaParla();
         var stop = Stile.Bottone("STOP", pericolo: true);
         stop.Click += (_, _) => { _ponte.Stop(); Aggiungi("Liquidino", "Mi sono fermato e ho spento i modelli.", false); AggiornaStato(); };
 
@@ -176,9 +174,10 @@ public sealed class FinestraCasa : Window
             Child = tutto
         };
 
-        ponte.StatoCambiato += _ => Dispatcher.Invoke(AggiornaStato);
-        ponte.MondoCambiato += () => Dispatcher.Invoke(RiempiMondo);
-        ponte.Pensiero += testo => Dispatcher.Invoke(() => Aggiungi("Liquidino", testo, false));
+        ponte.StatoCambiato += _ => SulFilo(AggiornaStato);
+        ponte.MondoCambiato += () => SulFilo(RiempiMondo);
+        ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
+        ponte.Pensiero += testo => SulFilo(() => Aggiungi("Liquidino", testo, false));
         Loaded += (_, _) => SistemaPosizione();
         RiempiMondo();
         AggiornaStato();
@@ -227,10 +226,27 @@ public sealed class FinestraCasa : Window
         }
     }
 
-    public void AlternaParola()
+    public void MostraCreazioni()
     {
-        if (_ascolto) _ = FinisciAscolto();
-        else _ = IniziaAscolto();
+        Show();
+        Activate();
+        _lista.Focus();
+    }
+
+    public void InviaVoce(byte[] wav) => _ = Gira(() => _ponte.DaAudio(wav));
+
+    void SulFilo(Action azione)
+    {
+        if (Dispatcher.CheckAccess()) azione();
+        else Dispatcher.BeginInvoke(azione);
+    }
+
+    void AggiornaParla()
+    {
+        var acceso = _ponte.StaAscoltando;
+        _parla.Content = acceso ? "Ti ascolto" : "Parla";
+        _parla.BorderBrush = acceso ? Stile.VerdeP : Stile.Pennello("#3a3648");
+        _parla.Foreground = acceso ? Stile.VerdeP : Stile.Inchiostro;
     }
 
     async Task Invia()
@@ -241,37 +257,6 @@ public sealed class FinestraCasa : Window
         _input.Foreground = Stile.Inchiostro;
         Aggiungi("tu", testo, true);
         await Gira(() => _ponte.Messaggio(testo));
-    }
-
-    async Task IniziaAscolto()
-    {
-        if (_ascolto || _occupato) return;
-        try
-        {
-            _ponte.Microfono.Inizia();
-            _ascolto = true;
-            _ponte.ImpostaStato(StatoCompagno.Ascolta);
-            _parla.Content = "Ti ascolto…";
-        }
-        catch (Exception e)
-        {
-            Aggiungi("Liquidino", "Questo fallo tu: il microfono non si apre. " + e.Message, false);
-        }
-    }
-
-    async Task FinisciAscolto()
-    {
-        if (!_ascolto) return;
-        _ascolto = false;
-        _parla.Content = "Parla";
-        var wav = _ponte.Microfono.Ferma();
-        if (wav is null || wav.Length < 1000)
-        {
-            _ponte.ImpostaStato(StatoCompagno.Sveglio);
-            Aggiungi("Liquidino", "Non ho sentito niente. Tieni premuto «Parla» e parla.", false);
-            return;
-        }
-        await Gira(() => _ponte.DaAudio(wav));
     }
 
     async Task Gira(Func<Task<EsitoDialogo>> lavoro)

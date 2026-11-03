@@ -102,7 +102,7 @@ public sealed class Dialogo
     public async Task<EsitoDialogo> DaAudio(byte[] wav, CancellationToken ct)
     {
         if (wav.Length < 1000)
-            return Chiudi(Testo.FalloTu("non ho sentito niente. Tieni premuto «Parla» e riprova."), StatoCompagno.Sveglio, fallo: true);
+            return Chiudi(Testo.FalloTu("non ho sentito niente. Clicca di nuovo «Parla» e riprova."), StatoCompagno.Sveglio, fallo: true);
         if (!_regista.Presente(RuoloModello.Omni) || !_regista.MotorePresente)
             return Chiudi(Testo.FalloTu("per ascoltarti mi serve Omni, e non l'ho trovato nella cartella dei modelli."), StatoCompagno.Sveglio, fallo: true);
         string? detto;

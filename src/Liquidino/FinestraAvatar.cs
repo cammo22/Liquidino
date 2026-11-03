@@ -23,8 +23,10 @@ public sealed class FinestraAvatar : Window
     readonly Ponte _ponte;
     readonly Image _figura = new() { Stretch = Stretch.Uniform, IsHitTestVisible = false };
     readonly Ellipse _led = new() { Width = 14, Height = 14, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 10, 8), IsHitTestVisible = false };
+    readonly Button _parla;
     readonly Button _permesso;
     readonly Button _stop;
+    readonly Button _dormi;
     readonly DispatcherTimer _orologio;
     readonly DispatcherTimer _trasforma;
     readonly Random _caso = new();
@@ -49,25 +51,40 @@ public sealed class FinestraAvatar : Window
         ShowActivated = false;
         AllowDrop = true;
 
+        _parla = Stile.Bottone("Parla");
         _permesso = Stile.Bottone("Permesso", ponte.Impostazioni.PermessoPc);
         _stop = Stile.Bottone("STOP", pericolo: true);
+        var chat = Stile.Bottone("Chat", principale: true);
+        var creazioni = Stile.Bottone("Creazioni");
+        _dormi = Stile.Bottone("Dormi");
+        var impostazioni = Stile.Bottone("Impostazioni");
+        _parla.Click += (_, _) => _ponte.AlternaAscolto();
         _permesso.Click += (_, _) => _ponte.AlternaPermesso();
         _stop.Click += (_, _) => _ponte.Stop();
+        chat.Click += (_, _) => ApriCasa();
+        creazioni.Click += (_, _) => ApriCasa().MostraCreazioni();
+        _dormi.Click += (_, _) =>
+        {
+            if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio);
+            else _ponte.Stop();
+        };
+        impostazioni.Click += (_, _) => new FinestraImpostazioni(_ponte).ShowDialog();
         AggiornaPermesso();
+        AggiornaParla();
 
         var zona = new Grid { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) };
         zona.Children.Add(_figura);
         zona.Children.Add(_led);
         zona.MouseLeftButtonDown += InizioTrascinamento;
 
-        var comandi = new StackPanel
+        var comandi = new WrapPanel
         {
-            Orientation = Orientation.Horizontal,
+            Width = 268,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 0)
+            Margin = new Thickness(0, 6, 0, 0)
         };
-        comandi.Children.Add(_permesso);
-        comandi.Children.Add(_stop);
+        foreach (var b in new[] { _parla, chat, creazioni, _permesso, _stop, _dormi, impostazioni })
+            comandi.Children.Add(b);
 
         var radice = new Grid();
         radice.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -98,9 +115,11 @@ public sealed class FinestraAvatar : Window
             _trasforma.Interval = TimeSpan.FromMinutes(4 + _caso.NextDouble() * 4);
         };
 
-        ponte.StatoCambiato += s => Dispatcher.Invoke(() => ApplicaStato(s));
-        ponte.PermessoCambiato += () => Dispatcher.Invoke(AggiornaPermesso);
-        ponte.Pensiero += testo => Dispatcher.Invoke(() => MostraBolla(testo));
+        ponte.StatoCambiato += s => SulFilo(() => { ApplicaStato(s); AggiornaDormi(); });
+        ponte.PermessoCambiato += () => SulFilo(AggiornaPermesso);
+        ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
+        ponte.Pensiero += testo => SulFilo(() => MostraBolla(testo));
+        ponte.VocePronta += wav => SulFilo(() => ApriCasa().InviaVoce(wav));
 
         Loaded += (_, _) => { _orologio.Start(); _trasforma.Start(); };
         Closed += (_, _) =>
@@ -152,8 +171,8 @@ public sealed class FinestraAvatar : Window
     {
         if (msg == WmHotkey && wParam.ToInt32() == HotkeyId)
         {
-            var casa = ApriCasa();
-            casa.AlternaParola();
+            ApriCasa();
+            _ponte.AlternaAscolto();
             handled = true;
         }
         return IntPtr.Zero;
@@ -190,7 +209,7 @@ public sealed class FinestraAvatar : Window
         MouseMove -= muovi;
         _ponte.Impostazioni.AvatarX = Left;
         _ponte.Impostazioni.AvatarY = Top;
-        _ponte.Impostazioni.Salva();
+        _ = Task.Run(() => _ponte.Impostazioni.Salva());
         if (!_trascinato && e.ClickCount < 3) ApriCasa();
     }
 
@@ -249,7 +268,7 @@ public sealed class FinestraAvatar : Window
         if (nuovo is null) return;
         _foglio = nuovo;
         _ponte.Impostazioni.AvatarOggetto = nuovo.Nome;
-        _ponte.Impostazioni.Salva();
+        _ = Task.Run(() => _ponte.Impostazioni.Salva());
         Suona(AnimazioneDi(_ponte.Stato));
     }
 
@@ -264,14 +283,34 @@ public sealed class FinestraAvatar : Window
         Top = cy - Height / 2;
         _ponte.Impostazioni.AvatarX = Left;
         _ponte.Impostazioni.AvatarY = Top;
-        _ponte.Impostazioni.Salva();
+        _ = Task.Run(() => _ponte.Impostazioni.Salva());
     }
 
     void ApplicaScala()
     {
         var lato = 150 * _ponte.Impostazioni.AvatarScala;
-        Width = lato + 8;
-        Height = lato + 46;
+        Width = Math.Max(lato + 16, 284);
+        Height = lato + 188;
+    }
+
+    void SulFilo(Action azione)
+    {
+        if (Dispatcher.CheckAccess()) azione();
+        else Dispatcher.BeginInvoke(azione);
+    }
+
+    void AggiornaParla()
+    {
+        var acceso = _ponte.StaAscoltando;
+        _parla.Content = acceso ? "Ti ascolto" : "Parla";
+        _parla.BorderBrush = acceso ? Stile.VerdeP : Stile.Pennello("#3a3648");
+        _parla.Foreground = acceso ? Stile.VerdeP : Stile.Inchiostro;
+    }
+
+    void AggiornaDormi()
+    {
+        var dorme = _ponte.Stato == StatoCompagno.Dorme;
+        _dormi.Content = dorme ? "Sveglia" : "Dormi";
     }
 
     void AggiornaPermesso()

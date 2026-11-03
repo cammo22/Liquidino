@@ -30,15 +30,22 @@ public sealed class ClienteLlama : IDisposable
         _http = new HttpClient
         {
             BaseAddress = new Uri($"http://127.0.0.1:{porta}/"),
-            Timeout = TimeSpan.FromMinutes(4)
+            Timeout = Timeout.InfiniteTimeSpan
         };
     }
+
+    public static TimeSpan TempoVita { get; } = TimeSpan.FromSeconds(2);
+    public static TimeSpan TempoScarico { get; } = TimeSpan.FromSeconds(4);
+    public static TimeSpan TempoCarico { get; } = TimeSpan.FromSeconds(20);
+    public static TimeSpan TempoChat { get; } = TimeSpan.FromSeconds(60);
+    public static TimeSpan TempoVoce { get; } = TimeSpan.FromSeconds(30);
 
     public async Task<bool> Vivo(CancellationToken ct)
     {
         try
         {
-            using var r = await _http.GetAsync("health", ct);
+            using var limite = Limite(ct, TempoVita);
+            using var r = await _http.GetAsync("health", limite.Token).ConfigureAwait(false);
             return r.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -46,41 +53,46 @@ public sealed class ClienteLlama : IDisposable
 
     public async Task<bool> Carica(string id, CancellationToken ct)
     {
-        var risp = await Posta("models/load", new { model = id }, ct);
+        using var limite = Limite(ct, TempoCarico);
+        var risp = await Posta("models/load", new { model = id }, limite.Token).ConfigureAwait(false);
         if (!risp.ok && risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
-        var fine = DateTime.UtcNow.AddSeconds(90);
+        var fine = DateTime.UtcNow + TempoCarico;
         while (DateTime.UtcNow < fine)
         {
-            ct.ThrowIfCancellationRequested();
-            var stato = await StatoModello(id, ct);
+            limite.Token.ThrowIfCancellationRequested();
+            var stato = await StatoModello(id, limite.Token).ConfigureAwait(false);
             if (stato is "loaded") return true;
             if (stato is "failed" or "error") return false;
-            await Task.Delay(400, ct);
+            await Task.Delay(400, limite.Token).ConfigureAwait(false);
         }
-        return await StatoModello(id, ct) is "loaded";
+        return await StatoModello(id, limite.Token).ConfigureAwait(false) is "loaded";
     }
 
     public async Task Scarica(string id, CancellationToken ct)
     {
-        await Posta("models/unload", new { model = id }, ct);
+        using var limite = Limite(ct, TempoScarico);
+        await Posta("models/unload", new { model = id }, limite.Token).ConfigureAwait(false);
     }
 
     public async Task SalvaSlot(string id, string file, CancellationToken ct)
     {
-        await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { filename = file }, ct);
+        using var limite = Limite(ct, TempoScarico);
+        await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
     }
 
     public async Task RipristinaSlot(string id, string file, CancellationToken ct)
     {
-        await Posta($"slots/0?action=restore&model={Uri.EscapeDataString(id)}", new { filename = file }, ct);
+        using var limite = Limite(ct, TempoScarico);
+        await Posta($"slots/0?action=restore&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
     }
 
     public async Task<string?> StatoModello(string id, CancellationToken ct)
     {
         try
         {
-            using var r = await _http.GetAsync("models", ct);
-            var corpo = await r.Content.ReadAsStringAsync(ct);
+            using var limite = Limite(ct, TempoVita);
+            using var r = await _http.GetAsync("models", limite.Token).ConfigureAwait(false);
+            var corpo = await r.Content.ReadAsStringAsync(limite.Token).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(corpo);
             if (!doc.RootElement.TryGetProperty("data", out var data)) return null;
             foreach (var m in data.EnumerateArray())
@@ -114,7 +126,8 @@ public sealed class ClienteLlama : IDisposable
                 }
             }
         };
-        var risp = await Posta("v1/systemone", corpo, ct);
+        using var limite = Limite(ct, TempoChat);
+        var risp = await Posta("v1/systemone", corpo, limite.Token).ConfigureAwait(false);
         if (!risp.ok) throw new InvalidOperationException("d1 non ha risposto: " + Taglia(risp.corpo));
         return risp.corpo;
     }
@@ -187,7 +200,8 @@ public sealed class ClienteLlama : IDisposable
                 payload["tool_choice"] = new { type = "function", function = new { name = richiesta.StrumentoNome } };
             }
 
-            var risp = await Posta("v1/chat/completions", payload, ct);
+            using var limite = Limite(ct, TempoChat);
+            var risp = await Posta("v1/chat/completions", payload, limite.Token).ConfigureAwait(false);
             if (!risp.ok) throw new InvalidOperationException("La chat non ha risposto: " + Taglia(risp.corpo));
             return LeggiChat(risp.corpo);
         }
@@ -230,9 +244,10 @@ public sealed class ClienteLlama : IDisposable
             voice = voce is "male" or "female" ? voce : "female",
             response_format = "wav"
         };
+        using var limite = Limite(ct, TempoVoce);
         using var contenuto = new StringContent(JsonSerializer.Serialize(corpo), Encoding.UTF8, "application/json");
-        using var r = await _http.PostAsync("tts", contenuto, ct);
-        var bytes = await r.Content.ReadAsByteArrayAsync(ct);
+        using var r = await _http.PostAsync("tts", contenuto, limite.Token).ConfigureAwait(false);
+        var bytes = await r.Content.ReadAsByteArrayAsync(limite.Token).ConfigureAwait(false);
         if (!r.IsSuccessStatusCode || bytes.Length < 44)
             throw new InvalidOperationException("La voce non è uscita.");
         return bytes;
@@ -242,9 +257,16 @@ public sealed class ClienteLlama : IDisposable
     {
         using var contenuto = new StringContent(JsonSerializer.Serialize(corpo, JsonIo.Opzioni), Encoding.UTF8, "application/json");
         contenuto.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        using var r = await _http.PostAsync(percorso, contenuto, ct);
-        var testo = await r.Content.ReadAsStringAsync(ct);
+        using var r = await _http.PostAsync(percorso, contenuto, ct).ConfigureAwait(false);
+        var testo = await r.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         return (r.IsSuccessStatusCode, testo);
+    }
+
+    static CancellationTokenSource Limite(CancellationToken ct, TimeSpan tempo)
+    {
+        var limite = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limite.CancelAfter(tempo);
+        return limite;
     }
 
     static string Taglia(string s) => s.Length <= 180 ? s : s[..180];

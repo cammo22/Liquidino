@@ -24,7 +24,11 @@ public sealed class Ponte
     public event Action? MondoCambiato;
     public event Action<string>? Pensiero;
     public event Action? PermessoCambiato;
+    public event Action? AscoltoCambiato;
+    public event Action<byte[]>? VocePronta;
+    public bool StaAscoltando { get; private set; }
     public FinestraCasa? Casa { get; set; }
+    public ComandiLocali Comandi { get; } = new();
 
     CancellationTokenSource _cts = new();
     DispatcherTimer? _ciclo;
@@ -68,11 +72,16 @@ public sealed class Ponte
     public void ImpostaStato(StatoCompagno stato)
     {
         Stato = stato;
-        var disp = System.Windows.Application.Current?.Dispatcher;
+        SulFiloUi(() => StatoCambiato?.Invoke(stato));
+    }
+
+    void SulFiloUi(Action azione)
+    {
+        var filo = System.Windows.Application.Current?.Dispatcher;
         try
         {
-            if (disp is not null && !disp.CheckAccess()) disp.Invoke(() => StatoCambiato?.Invoke(stato));
-            else StatoCambiato?.Invoke(stato);
+            if (filo is null || filo.CheckAccess()) azione();
+            else filo.BeginInvoke(azione);
         }
         catch { /* la finestra si sta chiudendo */ }
     }
@@ -81,31 +90,82 @@ public sealed class Ponte
 
     public void Annulla()
     {
-        _cts.Cancel();
-        _cts.Dispose();
+        try { _cts.Cancel(); } catch { /* già annullato */ }
         _cts = new CancellationTokenSource();
-        if (Microfono.StaRegistrando) Microfono.Ferma();
-        Lettore.Ferma();
+        Regista.AnnullaOperazioni();
+        _ = Task.Run(() =>
+        {
+            try { if (Microfono.StaRegistrando) Microfono.Ferma(); } catch { /* il microfono può essere già chiuso */ }
+            try { Lettore.Ferma(); } catch { /* il lettore può essere già chiuso */ }
+        });
+        StaAscoltando = false;
+        SulFiloUi(() => AscoltoCambiato?.Invoke());
         if (Stato is StatoCompagno.Pensa or StatoCompagno.Ascolta or StatoCompagno.Parla)
             ImpostaStato(StatoCompagno.Sveglio);
-        Registro.Scrivi("annulla", "turno interrotto", "ok");
+        _ = Task.Run(() => Registro.Scrivi("annulla", "turno interrotto", "ok"));
     }
 
+    /// <summary>Ritorna subito. Si può premere più volte: non aspetta il motore e non blocca la finestra.</summary>
     public void Stop()
     {
         Annulla();
         Dialogo.DimenticaSessione();
         ImpostaStato(StatoCompagno.Dorme);
-        _ = Regista.ScaricaTutto(CancellationToken.None);
-        Registro.Scrivi("stop", "STOP premuto: modelli scaricati", "ok");
+        _ = Task.Run(() => Registro.Scrivi("stop", "STOP premuto: modelli scaricati", "ok"));
+        _ = Comandi.StopAsync(ct => Regista.ScaricaTutto(ct), TimeSpan.FromSeconds(4));
     }
 
     public void AlternaPermesso()
     {
         Impostazioni.PermessoPc = !Impostazioni.PermessoPc;
-        Impostazioni.Salva();
-        Registro.Scrivi("permesso", Impostazioni.PermessoPc ? "permesso del PC acceso" : "permesso del PC spento", "ok");
+        Comandi.ImpostaPermesso(Impostazioni.PermessoPc);
+        var acceso = Impostazioni.PermessoPc;
+        _ = Task.Run(() =>
+        {
+            Impostazioni.Salva();
+            Registro.Scrivi("permesso", acceso ? "permesso del PC acceso" : "permesso del PC spento", "ok");
+        });
         PermessoCambiato?.Invoke();
+    }
+
+    public void AlternaAscolto()
+    {
+        if (StaAscoltando) _ = ChiudiAscoltoAsync(invia: true);
+        else _ = ApriAscoltoAsync();
+    }
+
+    async Task ApriAscoltoAsync()
+    {
+        if (StaAscoltando) return;
+        try
+        {
+            await Task.Run(() => Microfono.Inizia()).ConfigureAwait(false);
+            StaAscoltando = true;
+            ImpostaStato(StatoCompagno.Ascolta);
+            SulFiloUi(() => AscoltoCambiato?.Invoke());
+        }
+        catch (Exception e)
+        {
+            StaAscoltando = false;
+            _ = Task.Run(() => Registro.SegnaErrore("microfono: " + e.Message));
+            SulFiloUi(() => AscoltoCambiato?.Invoke());
+        }
+    }
+
+    async Task ChiudiAscoltoAsync(bool invia)
+    {
+        if (!StaAscoltando && !Microfono.StaRegistrando) return;
+        StaAscoltando = false;
+        byte[]? wav = null;
+        try { wav = await Task.Run(() => Microfono.Ferma()).ConfigureAwait(false); }
+        catch { /* niente da mandare */ }
+        if (Stato == StatoCompagno.Ascolta) ImpostaStato(StatoCompagno.Sveglio);
+        SulFiloUi(() => AscoltoCambiato?.Invoke());
+        if (invia && wav is { Length: >= 1000 })
+        {
+            var copia = wav;
+            SulFiloUi(() => VocePronta?.Invoke(copia));
+        }
     }
 
     public async Task<EsitoDialogo> Messaggio(string testo)
@@ -161,7 +221,7 @@ public sealed class Ponte
 
     async Task Dopo(EsitoDialogo esito, CancellationToken ct)
     {
-        if (esito.FileCreato is not null || esito.MostraMondo) MondoCambiato?.Invoke();
+        if (esito.FileCreato is not null || esito.MostraMondo) SulFiloUi(() => MondoCambiato?.Invoke());
         if (esito.VuoiVoce && esito.Testo.Length > 0 && !ct.IsCancellationRequested)
             await Parla(esito.Testo, ct);
         if (esito.ScaricaDopo)
@@ -205,8 +265,9 @@ public sealed class Ponte
         {
             var esito = await Ciclo.Gira(DateTimeOffset.Now, MisuraPc.Occupato(), Token());
             if (!esito.Fatto || esito.Testo is null) return;
-            MondoCambiato?.Invoke();
-            Pensiero?.Invoke(esito.Testo);
+            SulFiloUi(() => MondoCambiato?.Invoke());
+            var detto = esito.Testo;
+            SulFiloUi(() => Pensiero?.Invoke(detto));
             if (esito.Parla) await Parla(esito.Testo, Token());
         }
         finally { _cicloInCorso = false; }
@@ -226,24 +287,26 @@ public sealed class Ponte
 
     public async Task RicaricaMotore()
     {
-        Impostazioni.Salva();
-        await Regista.Ferma();
+        await Task.Run(() => Impostazioni.Salva()).ConfigureAwait(false);
+        await Regista.Ferma().ConfigureAwait(false);
         Regista.Rileggi();
-        _ciclo?.Stop();
-        if (_ciclo is not null)
+        SulFiloUi(() =>
         {
+            _ciclo?.Stop();
+            if (_ciclo is null) return;
             _ciclo.Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti);
             if (Impostazioni.CicloAutonomo) _ciclo.Start();
-        }
+        });
     }
 
     public void Chiudi()
     {
         _ciclo?.Stop();
         _notte?.Stop();
+        try { _cts.Cancel(); } catch { /* già annullato */ }
         try { Microfono.Dispose(); } catch { /* il microfono può essere già chiuso */ }
         try { Lettore.Dispose(); } catch { /* il lettore può essere già chiuso */ }
-        try { Task.Run(() => Regista.Ferma()).GetAwaiter().GetResult(); } catch { /* in chiusura non si insiste */ }
+        try { Regista.UccidiSubito(); } catch { /* in chiusura non si insiste */ }
     }
 
     public string RigaStato()

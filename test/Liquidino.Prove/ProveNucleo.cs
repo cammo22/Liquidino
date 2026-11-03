@@ -271,6 +271,57 @@ public class ProveNucleo
     }
 
     [Fact]
+    public async Task Permesso_on_off_e_due_stop_non_restano_appesi()
+    {
+        var comandi = new ComandiLocali();
+        comandi.AlternaPermesso();
+        Assert.True(comandi.Permesso);
+        comandi.AlternaPermesso();
+        Assert.False(comandi.Permesso);
+
+        var entrato = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var rilascio = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var primo = comandi.StopAsync(async ct =>
+        {
+            entrato.TrySetResult();
+            await rilascio.Task.WaitAsync(ct);
+        }, TimeSpan.FromSeconds(4));
+
+        await entrato.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var secondo = comandi.StopAsync(_ => Task.CompletedTask, TimeSpan.FromSeconds(4));
+        var chiVince = await Task.WhenAny(secondo, Task.Delay(1500));
+        Assert.Same(secondo, chiVince);
+
+        rilascio.TrySetResult();
+        await primo.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public void Il_preset_non_contiene_hf_repo_ne_indirizzi()
+    {
+        var sporco = """
+            version = 1
+            [*]
+            flash-attn = on
+            hf-repo = handy-computer/nemotron-3.5-asr-streaming-0.6b-gguf
+
+            [handy-computer/nemotron-3.5-asr-streaming-0.6b-gguf]
+            hf-repo = handy-computer/nemotron-3.5-asr-streaming-0.6b-gguf
+
+            [liquidino-mani]
+            model = C:/modelli/LFM3-1.7B-Q4_K_M.gguf
+            """;
+        var pulito = PresetMotore.SenzaRete(sporco);
+        Assert.Contains("[liquidino-mani]", pulito);
+        Assert.Contains("flash-attn = on", pulito);
+        Assert.DoesNotContain("hf-repo", pulito);
+        Assert.DoesNotContain("nemotron", pulito);
+        Assert.DoesNotContain("http", pulito);
+        var argomenti = RilevatoreModelli.Argomenti("llama-server.exe", 8094, "modelli.ini");
+        Assert.Contains("--offline", argomenti);
+    }
+
+    [Fact]
     public void Il_decisore_locale_capisce_le_parole_semplici()
     {
         Assert.Equal("crea_nota", DecisoreLocale.Scegli("Liquidino, prendi nota: pane e latte").Azione);
