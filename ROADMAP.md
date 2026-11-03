@@ -1,21 +1,20 @@
 # Roadmap
 
-Questa è la prova minima: si avvia, si parla, si scrive, si ricorda. Il resto è scritto qui, non è nel programma.
+Avanzamento verso la versione definitiva: **41%**.
 
-## Rimandato
+Il 100% è Liquidino che sta sul desktop da solo: ti sente quando lo chiami, fa le cose sul PC solo se glielo permetti, ricorda, crea, e si può far evolvere senza perdere la versione di prima. Quello che c'è oggi è il compagno che parla, scrive e si aggiorna. Il resto è elencato qui sotto, con il peso che ha sul totale.
 
-- **Parola «Ehi Liquidino».** La struttura c'è (`orecchio/`, Silero VAD licenza MIT, codice openWakeWord licenza Apache-2.0). Manca il modello addestrato da noi. I modelli già pronti di openWakeWord sono in inglese e non commerciali: non li mettiamo. Per ora: clic, tasto «Parla», Ctrl+Spazio.
-- **Uso del PC.** C'è il tasto Permesso, lo STOP e il registro. Non c'è il cursore suo, né l'elenco delle azioni sul desktop, né il mouse. Se glielo chiedi, dice di farlo tu.
-- **Evolversi.** Conta gli errori e, dopo dodici, lo dice una volta al giorno. Non parte nessun addestramento e non sostituisce il modello. La versione precedente si conserverà quando questa parte esisterà.
-- **Voce diretta.** La prova sulla RTX 4060 ha mostrato che la voce intrecciata di Omni in italiano non è affidabile. Si usa il testo più `/tts`. Si riprova quando i modelli migliorano.
-- **d1-Omni, VL, Audio.** Il regista li riconosce e li può caricare se i file GGUF ci sono (mai più di due insieme). Nel flusso di tutti i giorni usiamo d1, Omni e, per compilare le azioni, LFM3-1.7B. VL serve se ci trascini un'immagine e Omni non c'è.
-- **Contesto 128K misurato sul serio.** All'avvio si leggono RAM e VRAM e si sceglie (sul PC di prova: 128K per le mani). Non si fa ancora una prova di carico che riempie davvero la cache. Cache KV q4 e flash-attention sono nel preset. Il salvataggio dello slot su disco viene chiamato; va verificato su quel PC.
-- **Creazioni.** C'è l'elenco dei file, il cestino e la cartella. Mancano le icone grandi, i filtri, l'anteprima e il diario della giornata.
-- **Avatar che muove la bocca.** Gli sprite approvati restano. Un viso 3D con la bocca sincronizzata (TalkingHead) è un'idea successiva, e servirebbe un modello con le forme della bocca.
-- **Piano B della voce su CPU** (Kokoro) se Omni non c'è.
-- **Regola del firewall** che blocca llama-server verso l'esterno. Il programma lo avvia già solo su 127.0.0.1.
-- **Fase di amicizia più ricca.** Per i primi 14 giorni il pensiero orario è un saluto, non una creazione scelta da lui. Dopo, d1 può scegliere il silenzio o una nota. Manca il voto tuo sulle creazioni e il rifacimento guidato, oltre al cestino quando il file esce vuoto.
+| Pezzo | Peso | Fatto | Manca per il 100% |
+| --- | ---: | ---: | --- |
+| Parola «Ehi Liquidino» | 10 | 0 | Manca il modello addestrato da noi. La cartella `orecchio/` c'è. Silero VAD è MIT, il codice di openWakeWord è Apache-2.0. I modelli già pronti di openWakeWord non si usano. Per ora: clic, «Parla», Ctrl+Spazio. |
+| Uso del PC | 15 | 2 | C'è il permesso, lo STOP e il registro. Manca il suo cursore, l'elenco delle azioni sul desktop e il mouse. Se glielo chiedi, dice di farlo tu. |
+| Voce | 10 | 6 | Capisce e legge con Omni (`/tts`). Non si ascolta mentre parla. Manca la voce intrecciata in italiano, che sulla RTX 4060 non era affidabile, e un piano B su CPU (Kokoro) se Omni non c'è. |
+| Modelli e dati | 10 | 8 | Carica il modello prima di rispondere, ne tiene due accesi mentre si chiacchiera, e i dati stanno fuori dalla cartella di Velopack. Manca la prova di carico che riempie davvero la cache da 128K e la verifica dello slot su quel PC. La regola del firewall verso l'esterno non c'è: il server ascolta già solo su 127.0.0.1. |
+| Interfaccia | 8 | 7 | Fumetto sull'avatar, scelte cliccabili, tasti con simboli che compaiono al passaggio del mouse, colori dei servizi accesi. Manca la bocca sincronizzata (TalkingHead): gli sprite approvati restano. |
+| Memoria e creazioni | 10 | 5 | Note, memoria in markdown, cestino, elenco file. Mancano le icone grandi, i filtri, l'anteprima e il diario della giornata. |
+| Evolversi | 10 | 1 | Conta gli errori e, dopo dodici, lo dice una volta al giorno. Non parte nessun addestramento e non sostituisce il modello. La versione precedente si conserverà quando questa parte esisterà. |
+| Notte e autonomia | 7 | 6 | Di notte dorme, ma aspetta se stai usando la chat. Il pensiero orario si può spegnere. Manca il voto sulle creazioni e il rifacimento guidato. Nelle prime due settimane il pensiero è un saluto. |
+| Vista e altri modelli | 10 | 2 | Il regista riconosce d1-Omni, VL e Audio e li carica se i file ci sono, mai più di due insieme. Nel flusso di tutti i giorni usiamo d1, Omni e, per compilare, LFM3-1.7B. VL serve se ci trascini un'immagine e Omni non c'è. Non sono ancora nel giro quotidiano. |
+| Contesto misurato sul serio | 10 | 4 | All'avvio si leggono RAM e VRAM e si sceglie (sul PC di prova: 128K per le mani). Cache KV q4 e flash-attention sono nel preset. Non c'è ancora una prova che riempie la cache. |
 
-## Già in questa prova
-
-Avatar con i quattro stati, chat, push-to-talk, regista con al massimo due modelli, catalogo di sei azioni con soglia 0,6, memoria in markdown, ciclo orario spegnibile, STOP, registro, setup del primo avvio.
+41 su 100. Si sale quando un pezzo della colonna «Manca» entra nel programma e resta verificato sul PC.

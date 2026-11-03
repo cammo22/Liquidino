@@ -27,6 +27,7 @@ public sealed class Ponte
     public event Action? AscoltoCambiato;
     public event Action<byte[]>? VocePronta;
     public event Action<string>? Annuncio;
+    public event Action<EsitoDialogo>? Risposto;
     public bool StaAscoltando { get; private set; }
     public FinestraCasa? Casa { get; set; }
     public ComandiLocali Comandi { get; } = new();
@@ -47,9 +48,17 @@ public sealed class Ponte
         Ciclo = new CicloAutonomo(impostazioni, Mondo, Registro, Regista);
         Lettore.Finito += () =>
         {
+            Microfono.SilenziaFino(DateTime.UtcNow.AddMilliseconds(500));
             if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
         };
     }
+
+    DateTimeOffset _ultimoGesto = DateTimeOffset.Now;
+
+    public void SegnaGesto() => _ultimoGesto = DateTimeOffset.Now;
+
+    public bool StaLavorando =>
+        StaAscoltando || Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla;
 
     public void AvviaOrologi()
     {
@@ -64,7 +73,7 @@ public sealed class Ponte
         _notte = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _notte.Tick += async (_, _) =>
         {
-            try { await ControllaNotte(); }
+            try { await ControllaQuiete(); }
             catch { /* la notte si ricontrolla fra un minuto */ }
         };
         _notte.Start();
@@ -138,6 +147,7 @@ public sealed class Ponte
     async Task ApriAscoltoAsync()
     {
         if (StaAscoltando) return;
+        SegnaGesto();
         try
         {
             await Task.Run(() => Microfono.Inizia()).ConfigureAwait(false);
@@ -172,6 +182,7 @@ public sealed class Ponte
     public async Task<EsitoDialogo> Messaggio(string testo)
     {
         var ct = Token();
+        SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
         try
         {
@@ -196,6 +207,7 @@ public sealed class Ponte
     public async Task<EsitoDialogo> DaAudio(byte[] wav)
     {
         var ct = Token();
+        SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
         try
         {
@@ -212,6 +224,7 @@ public sealed class Ponte
     public async Task<EsitoDialogo> Guarda(string percorso)
     {
         var ct = Token();
+        SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
         try
         {
@@ -241,8 +254,8 @@ public sealed class Ponte
 
     async Task Dopo(EsitoDialogo esito, CancellationToken ct)
     {
-        if (esito.FalloTu) Annuncia(esito.Testo);
         if (esito.FileCreato is not null || esito.MostraMondo) SulFiloUi(() => MondoCambiato?.Invoke());
+        SulFiloUi(() => Risposto?.Invoke(esito));
         if (esito.VuoiVoce && esito.Testo.Length > 0 && !ct.IsCancellationRequested)
             await Parla(esito.Testo, ct);
         if (esito.ScaricaDopo)
@@ -265,8 +278,10 @@ public sealed class Ponte
             ImpostaStato(StatoCompagno.Parla);
             var bytes = await Regista.Sintetizza(TagliaPerVoce(testo), Impostazioni.Voce, ct);
             if (bytes is null || bytes.Length < 44) return;
-            var path = Path.Combine(Path.GetTempPath(), "liquidino-voce.wav");
+            Lettore.Ferma();
+            var path = Path.Combine(Path.GetTempPath(), "liquidino-voce-" + Guid.NewGuid().ToString("N") + ".wav");
             await File.WriteAllBytesAsync(path, bytes, ct);
+            Microfono.SilenziaFino(DateTime.UtcNow.AddMinutes(2));
             Lettore.Suona(path);
         }
         catch (OperationCanceledException) { throw; }
@@ -294,16 +309,42 @@ public sealed class Ponte
         finally { _cicloInCorso = false; }
     }
 
-    async Task ControllaNotte()
+    async Task ControllaQuiete()
     {
-        if (!Impostazioni.ENotte(DateTimeOffset.Now)) return;
-        if (Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla) return;
-        if (Regista.Accesi.Count == 0 && Stato == StatoCompagno.Dorme) return;
-        Lettore.Ferma();
-        Dialogo.DimenticaSessione();
-        await Regista.ScaricaTutto(CancellationToken.None);
-        ImpostaStato(StatoCompagno.Dorme);
-        Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
+        var ora = DateTimeOffset.Now;
+        var lavora = StaLavorando;
+        if (Quiete.PuoAddormentarsi(Impostazioni.ENotte(ora), lavora, _ultimoGesto, ora))
+        {
+            if (Regista.Accesi.Count == 0 && Stato == StatoCompagno.Dorme) return;
+            Lettore.Ferma();
+            Dialogo.DimenticaSessione();
+            await Regista.ScaricaTutto(CancellationToken.None);
+            ImpostaStato(StatoCompagno.Dorme);
+            Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
+            return;
+        }
+        if (Quiete.PuoScaricare(lavora, Regista.Accesi.Count, _ultimoGesto, ora))
+        {
+            await Regista.ScaricaTutto(CancellationToken.None);
+            Registro.Scrivi("motore", "inattività: modelli scaricati", "ok");
+        }
+    }
+
+    public async Task PensieroAdesso()
+    {
+        SegnaGesto();
+        var esito = await Ciclo.Gira(DateTimeOffset.Now, MisuraPc.Occupato(), Token());
+        if (!esito.Fatto || esito.Testo is null)
+        {
+            Annuncia(string.IsNullOrWhiteSpace(esito.Motivo) ? "Adesso non ho un pensiero." : esito.Motivo);
+            return;
+        }
+        SulFiloUi(() =>
+        {
+            MondoCambiato?.Invoke();
+            Pensiero?.Invoke(esito.Testo);
+        });
+        if (esito.Parla) await Parla(esito.Testo, Token());
     }
 
     public async Task RicaricaMotore()

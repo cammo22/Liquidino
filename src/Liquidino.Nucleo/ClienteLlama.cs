@@ -138,8 +138,10 @@ public sealed class ClienteLlama : IDisposable
 
     public async Task<string> Decidi(string idModello, string stato, CatalogoAzioni catalogo, CancellationToken ct)
     {
+        var freschi = CatalogoAzioni.Predefinito();
         var criteria = new Dictionary<string, string>();
-        foreach (var a in catalogo.Azioni) criteria[a.Nome] = a.Descrizione;
+        foreach (var a in catalogo.Azioni)
+            criteria[a.Nome] = CatalogoAzioni.Criterio(freschi.Trova(a.Nome) ?? a);
         var corpo = new
         {
             model = idModello,
@@ -149,7 +151,7 @@ public sealed class ClienteLlama : IDisposable
                 azione = new
                 {
                     type = "choice",
-                    instructions = "Quale azione deve fare Liquidino? Scegline una sola fra queste.",
+                    instructions = CatalogoAzioni.IstruzioniD1,
                     criteria
                 }
             }

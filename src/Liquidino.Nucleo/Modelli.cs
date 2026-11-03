@@ -340,8 +340,19 @@ public static class PoliticaCarico
         var distinti = voluti.Distinct().ToList();
         if (distinti.Count > MassimoInsieme)
             throw new InvalidOperationException("Mai più di due modelli insieme.");
-        var spegni = accesi.Where(a => !distinti.Contains(a)).ToList();
         var accendi = distinti.Where(v => !accesi.Contains(v)).ToList();
+        var spegni = new List<RuoloModello>();
+        var occupati = accesi.Count + accendi.Count;
+        if (occupati > MassimoInsieme)
+        {
+            var daTogliere = occupati - MassimoInsieme;
+            foreach (var a in accesi.OrderBy(a => a == RuoloModello.D1 ? 1 : 0))
+            {
+                if (distinti.Contains(a)) continue;
+                spegni.Add(a);
+                if (spegni.Count == daTogliere) break;
+            }
+        }
         var dopo = accesi.Count - spegni.Count + accendi.Count;
         if (dopo > MassimoInsieme)
             throw new InvalidOperationException("Mai più di due modelli insieme.");

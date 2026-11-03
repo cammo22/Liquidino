@@ -2,9 +2,17 @@
   "azioni": [
     {
       "nome": "rispondi",
-      "descrizione": "È una chiacchiera o una domanda. Non chiede di scrivere, ricordare o dormire.",
+      "descrizione": "Chiacchiera, saluto o domanda. Non scrive, non ricorda, non dimentica e non segna l'ora. È la scelta se non sei sicuro.",
       "istruzioni": "Rispondi a voce e per iscritto, col carattere scelto. Non dire di aver fatto cose che non hai fatto.",
-      "vuoleParametri": false
+      "vuoleParametri": false,
+      "esempio": "«ciao», «chi sei», «come stai», «cosa sai fare», «CHI SEI»."
+    },
+    {
+      "nome": "che_ore_sono",
+      "descrizione": "Chiede l'ora o la data di adesso, sul suo PC. Non è una nota e non ha effetti.",
+      "istruzioni": "Di' l'ora locale. Non scrivere file.",
+      "vuoleParametri": false,
+      "esempio": "«che ore sono», «leggi l'ora», «che giorno è oggi»."
     },
     {
       "nome": "crea_nota",

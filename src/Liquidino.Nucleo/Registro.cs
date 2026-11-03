@@ -27,7 +27,7 @@ public sealed class Registro
             esito,
             dettaglio,
             sicurezza
-        }, JsonIo.Opzioni);
+        }, JsonIo.Riga);
         lock (_lucchetto)
         {
             var dir = Percorsi.Registro(_radiceDati);

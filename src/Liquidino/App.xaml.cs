@@ -15,7 +15,10 @@ public partial class App : System.Windows.Application
     public App()
     {
         // Prima di tutto: Velopack sistema l'avvio dopo un aggiornamento. Non va in rete da solo.
-        VelopackApp.Build().Run();
+        VelopackApp.Build()
+            .OnBeforeUpdateFastCallback(_ => MigrazioneDati.Esegui())
+            .OnBeforeUninstallFastCallback(_ => MigrazioneDati.Esegui())
+            .Run();
         InitializeComponent();
     }
 
@@ -45,6 +48,8 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        try { MigrazioneDati.Esegui(); }
+        catch { /* se la copia non riesce, i dati nuovi nascono vuoti e i vecchi restano dov'erano */ }
         Semi.Prepara();
         var imp = ImpostazioniUtente.Carica();
         if (!imp.PrimoAvvioCompletato)

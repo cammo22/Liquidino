@@ -182,6 +182,15 @@ public sealed class FinestraCasa : Window
         ponte.MondoCambiato += () => SulFilo(RiempiMondo);
         ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
         ponte.Pensiero += testo => SulFilo(() => Aggiungi("Liquidino", testo, false));
+        ponte.Risposto += esito => SulFilo(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(esito.Trascrizione))
+                Aggiungi("tu", esito.Trascrizione, true);
+            if (!string.IsNullOrWhiteSpace(esito.Testo))
+                Aggiungi("Liquidino", esito.Testo, false);
+            if (esito.MostraMondo) RiempiMondo();
+            AggiornaStato();
+        });
         Loaded += (_, _) => SistemaPosizione();
         RiempiMondo();
         AggiornaStato();
@@ -273,11 +282,7 @@ public sealed class FinestraCasa : Window
         _occupato = true;
         try
         {
-            var esito = await lavoro();
-            if (!string.IsNullOrWhiteSpace(esito.Trascrizione))
-                Aggiungi("tu", esito.Trascrizione, true);
-            Aggiungi("Liquidino", esito.Testo, false);
-            if (esito.MostraMondo) RiempiMondo();
+            await lavoro();
         }
         catch (Exception e)
         {

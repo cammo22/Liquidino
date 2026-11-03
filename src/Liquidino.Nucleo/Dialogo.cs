@@ -15,8 +15,8 @@ public sealed record EsitoDialogo(
 }
 
 /// <summary>
-/// Un turno di conversazione: d1 sceglie dal catalogo, sotto 0,6 chiede conferma,
-/// le mani riempiono i campi, Omni parla. Se non ce la fa, lo dice.
+/// Un turno di conversazione: d1 sceglie dal catalogo. La chiacchiera parte subito.
+/// Sotto 0,6 si chiede conferma solo per le azioni che cambiano qualcosa.
 /// </summary>
 public sealed class Dialogo
 {
@@ -74,12 +74,18 @@ public sealed class Dialogo
         }
 
         SceltaAzione scelta;
-        if (_regista.MotorePresente && _regista.Presente(RuoloModello.D1))
+        var parlante = _regista.Presente(RuoloModello.Omni) ? RuoloModello.Omni
+            : _regista.Presente(RuoloModello.Mani) ? RuoloModello.Mani : (RuoloModello?)null;
+        if (_regista.MotorePresente && (_regista.Presente(RuoloModello.D1) || parlante is not null))
         {
             try
             {
-                var acceso = await _regista.Assicura([RuoloModello.D1], ct);
-                var letta = acceso ? await _regista.Decidi(testo, _catalogo, ct) : null;
+                var insieme = new List<RuoloModello>();
+                if (_regista.Presente(RuoloModello.D1)) insieme.Add(RuoloModello.D1);
+                if (parlante is { } p && !insieme.Contains(p)) insieme.Add(p);
+                var acceso = await _regista.Assicura(insieme, ct);
+                var letta = acceso && _regista.Presente(RuoloModello.D1)
+                    ? await _regista.Decidi(testo, _catalogo, ct) : null;
                 scelta = letta ?? DecisoreLocale.Scegli(testo);
             }
             catch (OperationCanceledException) { throw; }
@@ -93,11 +99,10 @@ public sealed class Dialogo
 
         _registro.Scrivi("decisione", scelta.Fonte + " → " + scelta.Azione, "ok", scelta.Azione, scelta.Sicurezza);
 
-        if (scelta.ChiediConferma || scelta.Sicurezza < CatalogoAzioni.Soglia)
+        if (scelta.ChiediConferma && CatalogoAzioni.HaEffetti(scelta.Azione))
         {
             _inAttesa = (scelta.Azione, testo, scelta.Sicurezza);
-            var frase = "Non sono sicuro (sicurezza " + Testo.FormatoVirgola(scelta.Sicurezza) + "). Vuoi che faccia «" + NomeBello(scelta.Azione) + "»? Rispondi sì o no.";
-            return new EsitoDialogo(frase, StatoCompagno.Sveglio, true, false, false, true, false, null, null);
+            return new EsitoDialogo(DomandaConferma(scelta.Azione), StatoCompagno.Sveglio, true, false, false, true, false, null, null);
         }
         return await Esegui(scelta.Azione, testo, scelta.Sicurezza, scelta.Fonte, ct);
     }
@@ -179,6 +184,7 @@ public sealed class Dialogo
                 "ricorda" => await Memoria(testo, false, ct),
                 "dimentica" => await Memoria(testo, true, ct),
                 "mostra_creazioni" => Chiudi("Ecco il mio mondo, qui a fianco.", StatoCompagno.Sveglio) with { MostraMondo = true },
+                "che_ore_sono" => Chiudi(Testo.OraLocale(DateTimeOffset.Now), StatoCompagno.Sveglio),
                 "dormi" => new EsitoDialogo("Vado a dormire. Se mi vuoi, cliccami.", StatoCompagno.Dorme, false, false, false, true, true, null, null),
                 _ => await Rispondi(testo, ct)
             };
@@ -266,8 +272,7 @@ public sealed class Dialogo
             var scheda = _catalogo.Trova(azione);
             if (scheda is null || !scheda.VuoleParametri || scheda.Schema is null) return null;
             if (!_regista.MotorePresente || !_regista.Presente(RuoloModello.Mani)) return null;
-            var accesi = _regista.Accesi;
-            var insieme = accesi.Contains(RuoloModello.D1) && accesi.Count < 2
+            var insieme = _regista.Presente(RuoloModello.D1)
                 ? new[] { RuoloModello.D1, RuoloModello.Mani }
                 : new[] { RuoloModello.Mani };
             if (!await _regista.Assicura(insieme, ct)) return null;
@@ -344,7 +349,18 @@ public sealed class Dialogo
         "ricorda" => "ricorda",
         "dimentica" => "dimentica",
         "dormi" => "dormi",
+        "che_ore_sono" => "l'ora",
         _ => "rispondi"
+    };
+
+    public static string DomandaConferma(string azione) => azione switch
+    {
+        "crea_nota" => "Vuoi che me lo segni in una nota?",
+        "ricorda" => "Vuoi che me lo ricordi?",
+        "dimentica" => "Vuoi che lo dimentichi?",
+        "cestino" => "Vuoi che lo metta nel cestino?",
+        "usa_pc" => "Vuoi che usi il PC per questo?",
+        _ => "Vuoi che lo faccia?"
     };
 
     public const string PromptDiSerie = """

@@ -336,6 +336,7 @@ public sealed class Regista : IRegista
             UltimoErrore = "llama-server non è in ascolto.";
             return false;
         }
+        if (_accesi.Contains(ruolo)) return true;
         var id = NomiModello.IdDi(ruolo);
         var slot = id + ".bin";
         _registro.Scrivi("modello", "chiedo il caricamento di " + id, "ok", ruolo.ToString());
