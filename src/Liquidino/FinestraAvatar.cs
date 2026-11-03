@@ -415,8 +415,8 @@ public sealed class FinestraAvatar : Window
             MostraTasti();
             MostraBolla(esito.Testo, new[]
             {
-                new SceltaBolla("Sì", _ => { _domandaAperta = false; _ = _ponte.Messaggio("sì"); }),
-                new SceltaBolla("No", _ => { _domandaAperta = false; _ = _ponte.Messaggio("no"); })
+                new SceltaBolla("Sì", _testo => { _domandaAperta = false; _ = _ponte.Messaggio("sì"); }),
+                new SceltaBolla("No", _testo => { _domandaAperta = false; _ = _ponte.Messaggio("no"); })
             }, resta: true);
             return;
         }
@@ -438,7 +438,7 @@ public sealed class FinestraAvatar : Window
                 if (detto.Length == 0) return;
                 _ = _ponte.Messaggio("prendi nota: " + detto);
             }, Campo: true),
-            new SceltaBolla("Lascia", _ => _domandaAperta = false)
+            new SceltaBolla("Lascia", _testo => { _domandaAperta = false; })
         }, resta: true);
     }
 
