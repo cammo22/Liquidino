@@ -322,6 +322,20 @@ public class ProveNucleo
     }
 
     [Fact]
+    public void Le_note_della_versione_hanno_novita_correzioni_e_da_provare()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Directory.Build.props")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var props = File.ReadAllText(Path.Combine(dir!.FullName, "Directory.Build.props"));
+        var versione = System.Text.RegularExpressions.Regex.Match(props, "<Version>([^<]+)</Version>").Groups[1].Value;
+        var note = NoteRilascio.Estrai(File.ReadAllText(Path.Combine(dir.FullName, "CHANGELOG.md")), versione);
+        Assert.True(NoteRilascio.HaLeTreVoci(note));
+        Assert.Contains(versione, File.ReadAllText(Path.Combine(dir.FullName, "CHANGELOG.md")));
+    }
+
+    [Fact]
     public void Il_decisore_locale_capisce_le_parole_semplici()
     {
         Assert.Equal("crea_nota", DecisoreLocale.Scegli("Liquidino, prendi nota: pane e latte").Azione);

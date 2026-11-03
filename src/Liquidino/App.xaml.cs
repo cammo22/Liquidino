@@ -1,5 +1,6 @@
 using System.Windows;
 using Liquidino.Nucleo;
+using Velopack;
 
 namespace Liquidino;
 
@@ -10,6 +11,8 @@ public partial class App : System.Windows.Application
 
     public App()
     {
+        // Prima di tutto: Velopack sistema l'avvio dopo un aggiornamento. Non va in rete da solo.
+        VelopackApp.Build().Run();
         InitializeComponent();
     }
 
@@ -68,6 +71,8 @@ public partial class App : System.Windows.Application
         avatar.Show();
         _ponte.AvviaOrologi();
 
+        Aggiornamenti.Avvia();
+
         if (imp.VersioneNovitaViste != Ponte.Versione)
         {
             new FinestraNovita().Show();
@@ -79,6 +84,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         try { _ponte?.Chiudi(); } catch { /* in chiusura non si insiste */ }
+        try { Aggiornamenti.AllaChiusura(); } catch { /* l'aggiornamento, se c'è, ci riprova al prossimo avvio */ }
         try { _mutex?.ReleaseMutex(); } catch { /* il mutex può essere già lasciato */ }
         _mutex?.Dispose();
         base.OnExit(e);

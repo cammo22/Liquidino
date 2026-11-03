@@ -11,7 +11,6 @@ Questa è la prova minima: si avvia, si parla, si scrive, si ricorda. Il resto �
 - **d1-Omni, VL, Audio.** Il regista li riconosce e li può caricare se i file GGUF ci sono (mai più di due insieme). Nel flusso di tutti i giorni usiamo d1, Omni e, per compilare le azioni, LFM3-1.7B. VL serve se ci trascini un'immagine e Omni non c'è.
 - **Contesto 128K misurato sul serio.** All'avvio si leggono RAM e VRAM e si sceglie (sul PC di prova: 128K per le mani). Non si fa ancora una prova di carico che riempie davvero la cache. Cache KV q4 e flash-attention sono nel preset. Il salvataggio dello slot su disco viene chiamato; va verificato su quel PC.
 - **Creazioni.** C'è l'elenco dei file, il cestino e la cartella. Mancano le icone grandi, i filtri, l'anteprima e il diario della giornata.
-- **Aggiornamenti.** Il tasto in alto, se lo premi, guarda solo se esiste una release più nuova. Non scarica e non installa da solo. Niente controllo all'avvio, niente telemetria.
 - **Avatar che muove la bocca.** Gli sprite approvati restano. Un viso 3D con la bocca sincronizzata (TalkingHead) è un'idea successiva, e servirebbe un modello con le forme della bocca.
 - **Piano B della voce su CPU** (Kokoro) se Omni non c'è.
 - **Regola del firewall** che blocca llama-server verso l'esterno. Il programma lo avvia già solo su 127.0.0.1.
