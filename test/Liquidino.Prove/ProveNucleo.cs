@@ -95,8 +95,8 @@ public class ProveNucleo
         imp.ApplicaContesto(SceltaContesto.Scegli(new InfoMacchina(InfoMacchina.Gb(63), 8192L * 1024 * 1024)));
         var schede = new[]
         {
-            new SchedaModello(RuoloModello.Mani, "liquidino-mani", Path.Combine(dir, "mani.gguf"), null, "mani.gguf"),
-            new SchedaModello(RuoloModello.Omni, "liquidino-omni", Path.Combine(dir, "omni.gguf"), Path.Combine(dir, "mm.gguf"), "omni.gguf"),
+            new SchedaModello(RuoloModello.Mani, "liquidino-mani", Path.Combine(dir, "LFM3-1.7B-Q4_K_M.gguf"), null, "LFM3-1.7B-Q4_K_M.gguf"),
+            new SchedaModello(RuoloModello.Omni, "liquidino-omni", Path.Combine(dir, "LFM3-Omni-2B-Q4_K_M.gguf"), Path.Combine(dir, "mm.gguf"), "LFM3-Omni-2B-Q4_K_M.gguf"),
             new SchedaModello(RuoloModello.D1, "liquidino-d1", Path.Combine(dir, "d1.gguf"), null, "d1.gguf")
         };
         var ini = PresetMotore.Scrivi(Path.Combine(dir, "modelli.ini"), Path.Combine(dir, "slot"), schede, imp);
@@ -366,6 +366,8 @@ public class ProveNucleo
         public Func<string, SceltaAzione?>? SuDecidi { get; set; }
 
         public bool Presente(RuoloModello ruolo) => Presenti.Contains(ruolo);
+        public string? UltimoErrore => null;
+        public string Riassunto() => Descrizione();
         public string Descrizione() => "finto";
 
         public Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)

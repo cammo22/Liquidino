@@ -282,7 +282,9 @@ public sealed class FinestraCasa : Window
         catch (Exception e)
         {
             _ponte.Registro.SegnaErrore(e.Message);
-            Aggiungi("Liquidino", "Questo fallo tu: " + e.Message, false);
+            var detto = "Questo fallo tu: " + e.Message;
+            Aggiungi("Liquidino", detto, false);
+            _ponte.Annuncia(detto);
         }
         finally
         {

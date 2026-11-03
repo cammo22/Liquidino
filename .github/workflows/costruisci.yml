@@ -22,6 +22,12 @@ jobs:
       - name: Prove
         run: dotnet test Liquidino.sln -c Release --nologo
 
+      - name: Prova con llama-server
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/prova-motore.ps1
+
       - name: Installer
         shell: pwsh
         run: ./scripts/pacchetto.ps1
@@ -29,9 +35,10 @@ jobs:
       - name: Artefatto
         uses: actions/upload-artifact@v4
         with:
-          name: Liquidino-Setup
+          name: Liquidino-0.2.1
           path: |
             Releases/Liquidino-Setup.exe
+            Releases/Liquidino-portatile.zip
             Releases/*.nupkg
             Releases/releases.win.json
           if-no-files-found: error

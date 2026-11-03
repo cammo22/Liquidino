@@ -43,6 +43,9 @@ public sealed class Dialogo
     {
         testo = (testo ?? "").Trim();
         if (testo.Length == 0) return EsitoDialogo.Vuoto();
+        _registro.Scrivi("turno", "ricevuto: " + (testo.Length > 80 ? testo[..80] : testo), "ok");
+        if (ct.IsCancellationRequested)
+            return Chiudi("Turno annullato: è stato premuto STOP o Esc prima che partissi. Il modello non è stato caricato.", StatoCompagno.Sveglio, fallo: true, voce: false);
 
         if (Testo.ChiedeIlPc(testo))
         {
@@ -184,7 +187,9 @@ public sealed class Dialogo
         catch (Exception e)
         {
             var avvisa = _registro.SegnaErrore(azione + ": " + e.Message);
-            return Chiudi(AggiungiEvoluzione(Testo.FalloTu("l'azione «" + NomeBello(azione) + "» non è andata a buon fine."), avvisa), StatoCompagno.Sveglio, fallo: true);
+            var dettaglio = e.Message.Replace('\n', ' ').Trim();
+            if (dettaglio.Length > 180) dettaglio = dettaglio[..180];
+            return Chiudi(AggiungiEvoluzione(Testo.FalloTu("l'azione «" + NomeBello(azione) + "» non è andata a buon fine. " + dettaglio), avvisa), StatoCompagno.Sveglio, fallo: true);
         }
     }
 
@@ -199,7 +204,10 @@ public sealed class Dialogo
             return Chiudi(offline, StatoCompagno.Sveglio, voce: false);
         }
         if (!await _regista.Assicura([ruolo.Value], ct))
-            return Chiudi(Testo.FalloTu("il modello della chiacchiera non si è acceso. Controlla la cartella del motore, in Impostazioni."), StatoCompagno.Sveglio, fallo: true, voce: false);
+        {
+            var perche = _regista.UltimoErrore ?? "il modello non è partito e non ho un dettaglio dal motore";
+            return Chiudi(Testo.FalloTu("non riesco a caricare " + NomiModello.Etichetta(ruolo.Value) + ". " + perche), StatoCompagno.Sveglio, fallo: true, voce: false);
+        }
         var risp = await _regista.Completa(new RichiestaChat(
             ruolo.Value, Sistema(), _storia.ToList(), testo, null, null, null, null,
             ruolo == RuoloModello.Omni ? 0 : 0.2, 400, true), ct);

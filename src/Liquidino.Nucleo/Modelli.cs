@@ -249,7 +249,8 @@ public static class PresetMotore
             if (!string.IsNullOrWhiteSpace(m.Mmproj))
                 righe.Add("mmproj = " + PerIni(m.Mmproj));
             righe.Add("ctx-size = " + NomiModello.Contesto(m.Ruolo, imp));
-            if (m.Ruolo is RuoloModello.Mani or RuoloModello.Omni or RuoloModello.Vl or RuoloModello.Audio)
+            if (m.Ruolo is RuoloModello.Mani or RuoloModello.Omni or RuoloModello.Vl or RuoloModello.Audio
+                && m.NomeFile.Contains("lfm", StringComparison.OrdinalIgnoreCase))
             {
                 righe.Add("jinja = true");
                 righe.Add("reasoning = off");

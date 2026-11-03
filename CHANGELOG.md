@@ -1,5 +1,25 @@
 # Novità
 
+## 0.2.1
+
+### Novità
+
+- Icona nell'area di notifica, in basso a destra. Tasto destro: mostra o nascondi l'avatar, aggiornamenti, esci.
+- Lo stesso menu sta anche sull'avatar, con in più Parla, Chat, Creazioni, Permesso, STOP, Dormi e Impostazioni.
+- Gli aggiornamenti, dal menu, dicono a che punto sono: controllo, sei aggiornato, scarico, riavvia.
+
+### Correzioni
+
+- Prima di rispondere, Liquidino carica davvero il modello e aspetta che sia pronto. Se non parte, lo scrive in chat e nel fumetto, e nel registro.
+- Un turno annullato dice perché (STOP o Esc).
+- Esci chiude anche llama-server. Se non risponde, dopo qualche secondo viene chiuso comunque.
+
+### Da provare
+
+- Scrivi «ciao» in chat. Nel registro di oggi devono comparire «ricevuto», «chiedo il caricamento» e «caricato».
+- Premi STOP. Deve comparire «scaricato» o «STOP premuto», e la finestra resta viva.
+- Tasto destro sull'icona in basso a destra: nascondi l'avatar, poi mostralo di nuovo. Esci chiude tutto.
+
 ## 0.2.0
 
 ### Novità

@@ -51,21 +51,37 @@ public sealed class ClienteLlama : IDisposable
         catch { return false; }
     }
 
+    public string? UltimoErrore { get; private set; }
+
+    /// <summary>Chiede al router di caricare il modello e aspetta che lo stato sia «loaded».</summary>
     public async Task<bool> Carica(string id, CancellationToken ct)
     {
+        UltimoErrore = null;
         using var limite = Limite(ct, TempoCarico);
         var risp = await Posta("models/load", new { model = id }, limite.Token).ConfigureAwait(false);
-        if (!risp.ok && risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!risp.ok)
+        {
+            if (risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
+            UltimoErrore = "il router ha rifiutato il caricamento di " + id + ": " + Taglia(risp.corpo);
+            return false;
+        }
         var fine = DateTime.UtcNow + TempoCarico;
         while (DateTime.UtcNow < fine)
         {
             limite.Token.ThrowIfCancellationRequested();
             var stato = await StatoModello(id, limite.Token).ConfigureAwait(false);
             if (stato is "loaded") return true;
-            if (stato is "failed" or "error") return false;
+            if (stato is "failed" or "error")
+            {
+                UltimoErrore = "il modello " + id + " è andato in errore durante il caricamento.";
+                return false;
+            }
             await Task.Delay(400, limite.Token).ConfigureAwait(false);
         }
-        return await StatoModello(id, limite.Token).ConfigureAwait(false) is "loaded";
+        var finale = await StatoModello(id, ct).ConfigureAwait(false);
+        if (finale is "loaded") return true;
+        UltimoErrore = "tempo scaduto: " + id + " non è pronto (stato: " + (finale ?? "sconosciuto") + ").";
+        return false;
     }
 
     public async Task Scarica(string id, CancellationToken ct)

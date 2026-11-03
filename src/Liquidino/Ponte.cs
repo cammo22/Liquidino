@@ -26,6 +26,7 @@ public sealed class Ponte
     public event Action? PermessoCambiato;
     public event Action? AscoltoCambiato;
     public event Action<byte[]>? VocePronta;
+    public event Action<string>? Annuncio;
     public bool StaAscoltando { get; private set; }
     public FinestraCasa? Casa { get; set; }
     public ComandiLocali Comandi { get; } = new();
@@ -102,7 +103,7 @@ public sealed class Ponte
         SulFiloUi(() => AscoltoCambiato?.Invoke());
         if (Stato is StatoCompagno.Pensa or StatoCompagno.Ascolta or StatoCompagno.Parla)
             ImpostaStato(StatoCompagno.Sveglio);
-        _ = Task.Run(() => Registro.Scrivi("annulla", "turno interrotto", "ok"));
+        _ = Task.Run(() => Registro.Scrivi("annulla", "turno interrotto: STOP o Esc, il caricamento viene fermato", "annullato"));
     }
 
     /// <summary>Ritorna subito. Si può premere più volte: non aspetta il motore e non blocca la finestra.</summary>
@@ -180,9 +181,16 @@ public sealed class Ponte
         }
         catch (OperationCanceledException)
         {
-            ImpostaStato(StatoCompagno.Dorme);
-            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Dorme, false, false, false, false, false, null, null);
+            return TurnoAnnullato();
         }
+    }
+
+    EsitoDialogo TurnoAnnullato()
+    {
+        var testo = "Turno annullato: è stato premuto STOP o Esc. Se il modello non era già pronto, non l'ho caricato.";
+        ImpostaStato(StatoCompagno.Dorme);
+        SulFiloUi(() => Annuncio?.Invoke(testo));
+        return new EsitoDialogo(testo, StatoCompagno.Dorme, false, false, true, false, false, null, null);
     }
 
     public async Task<EsitoDialogo> DaAudio(byte[] wav)
@@ -197,8 +205,7 @@ public sealed class Ponte
         }
         catch (OperationCanceledException)
         {
-            ImpostaStato(StatoCompagno.Dorme);
-            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Dorme, false, false, false, false, false, null, null);
+            return TurnoAnnullato();
         }
     }
 
@@ -214,13 +221,27 @@ public sealed class Ponte
         }
         catch (OperationCanceledException)
         {
-            ImpostaStato(StatoCompagno.Sveglio);
-            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Sveglio, false, false, false, false, false, null, null);
+            return TurnoAnnullato();
         }
+    }
+
+    public void Annuncia(string testo)
+    {
+        if (string.IsNullOrWhiteSpace(testo)) return;
+        SulFiloUi(() => Annuncio?.Invoke(testo));
+    }
+
+    public void SegnaAvvio()
+    {
+        var testo = Regista.Riassunto();
+        Registro.Scrivi("avvio", testo, "ok");
+        if (!Regista.MotorePresente || (!Regista.Presente(RuoloModello.Mani) && !Regista.Presente(RuoloModello.Omni)))
+            Annuncia("Questo fallo tu: " + testo + ". Senza questi file non posso caricare un modello.");
     }
 
     async Task Dopo(EsitoDialogo esito, CancellationToken ct)
     {
+        if (esito.FalloTu) Annuncia(esito.Testo);
         if (esito.FileCreato is not null || esito.MostraMondo) SulFiloUi(() => MondoCambiato?.Invoke());
         if (esito.VuoiVoce && esito.Testo.Length > 0 && !ct.IsCancellationRequested)
             await Parla(esito.Testo, ct);
@@ -299,14 +320,24 @@ public sealed class Ponte
         });
     }
 
-    public void Chiudi()
+    int _spento;
+
+    /// <summary>Chiude timer, microfono e llama-server. Se non risponde entro 4 secondi, kill dell'albero.</summary>
+    public void Spegni()
     {
+        if (Interlocked.Exchange(ref _spento, 1) == 1) return;
         _ciclo?.Stop();
         _notte?.Stop();
         try { _cts.Cancel(); } catch { /* già annullato */ }
         try { Microfono.Dispose(); } catch { /* il microfono può essere già chiuso */ }
         try { Lettore.Dispose(); } catch { /* il lettore può essere già chiuso */ }
-        try { Regista.UccidiSubito(); } catch { /* in chiusura non si insiste */ }
+        try
+        {
+            var compito = Task.Run(() => Regista.Ferma());
+            if (!compito.Wait(TimeSpan.FromSeconds(4)))
+                Regista.UccidiSubito();
+        }
+        catch { Regista.UccidiSubito(); }
     }
 
     public string RigaStato()

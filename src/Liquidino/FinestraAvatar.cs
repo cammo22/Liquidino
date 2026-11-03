@@ -119,16 +119,22 @@ public sealed class FinestraAvatar : Window
         ponte.PermessoCambiato += () => SulFilo(AggiornaPermesso);
         ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
         ponte.Pensiero += testo => SulFilo(() => MostraBolla(testo));
+        ponte.Annuncio += testo => SulFilo(() => MostraBolla(testo));
         ponte.VocePronta += wav => SulFilo(() => ApriCasa().InviaVoce(wav));
 
         Loaded += (_, _) => { _orologio.Start(); _trasforma.Start(); };
+        Closing += (_, e) =>
+        {
+            if (System.Windows.Application.Current is App { InUscita: true }) return;
+            e.Cancel = true;
+            Nascondi();
+        };
         Closed += (_, _) =>
         {
             _orologio.Stop();
             _trasforma.Stop();
             _bolla?.Close();
             if (_sorgente is not null) UnregisterHotKey(_sorgente.Handle, HotkeyId);
-            System.Windows.Application.Current.Shutdown();
         };
         MouseRightButtonUp += (_, e) => { Menu(); e.Handled = true; };
         MouseWheel += (_, e) => { CambiaScala(_ponte.Impostazioni.AvatarScala + (e.Delta > 0 ? 0.1 : -0.1)); e.Handled = true; };
@@ -178,6 +184,14 @@ public sealed class FinestraAvatar : Window
         return IntPtr.Zero;
     }
 
+    public void Nascondi() => Hide();
+
+    public void MostraDiNuovo()
+    {
+        Show();
+        Activate();
+    }
+
     public FinestraCasa ApriCasa()
     {
         if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio);
@@ -187,6 +201,7 @@ public sealed class FinestraAvatar : Window
             gia.Activate();
             return gia;
         }
+        _ponte.Registro.Scrivi("chat", "finestra aperta", "ok");
         var casa = new FinestraCasa(_ponte, this);
         _ponte.Casa = casa;
         casa.Closed += (_, _) => { if (_ponte.Casa == casa) _ponte.Casa = null; };
@@ -332,11 +347,33 @@ public sealed class FinestraAvatar : Window
     void Menu()
     {
         var m = new ContextMenu { PlacementTarget = this, FontFamily = Stile.Testo };
-        Voce("Apri la chat", () => ApriCasa());
-        Voce("Dormi", () => _ponte.Stop());
-        Voce("Sveglia", () => { if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio); });
-        Voce("Trasformati", Trasforma);
+        Voce(IsVisible ? "Nascondi l'avatar" : "Mostra l'avatar", () => { if (IsVisible) Nascondi(); else MostraDiNuovo(); });
+        Voce("Aggiornamenti: " + Aggiornamenti.Stato, async () =>
+        {
+            try
+            {
+                if (Aggiornamenti.Disponibile is null)
+                    await Aggiornamenti.Controlla(scarica: true, CancellationToken.None);
+                var detto = Aggiornamenti.Disponibile is null ? Aggiornamenti.Stato : await Aggiornamenti.Installa();
+                MostraBolla(detto);
+            }
+            catch (Exception e) { MostraBolla("Questo fallo tu: non sono riuscito a aggiornare. " + e.Message); }
+        });
+        m.Items.Add(new Separator());
+        Voce("Parla", () => _ponte.AlternaAscolto());
+        Voce("Chat", () => ApriCasa());
+        Voce("Creazioni", () => ApriCasa().MostraCreazioni());
+        Voce(_ponte.Impostazioni.PermessoPc ? "Permesso sì" : "Permesso", () => _ponte.AlternaPermesso());
+        Voce("STOP", () => _ponte.Stop());
+        Voce(_ponte.Stato == StatoCompagno.Dorme ? "Sveglia" : "Dormi", () =>
+        {
+            if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio);
+            else _ponte.Stop();
+        });
         Voce("Impostazioni", () => new FinestraImpostazioni(_ponte).ShowDialog());
+        Voce("Trasformati", Trasforma);
+        m.Items.Add(new Separator());
+        Voce("Esci", () => { if (System.Windows.Application.Current is App app) app.Esci(); });
         m.IsOpen = true;
 
         void Voce(string testo, Action fai)
