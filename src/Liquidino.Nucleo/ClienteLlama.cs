@@ -117,7 +117,13 @@ public sealed class ClienteLlama : IDisposable
                 if (!string.Equals(mid, id, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!m.TryGetProperty("status", out var st)) return "unloaded";
                 if (st.ValueKind == JsonValueKind.String) return st.GetString();
-                if (st.ValueKind == JsonValueKind.Object && st.TryGetProperty("value", out var v)) return v.GetString();
+                if (st.ValueKind == JsonValueKind.Object)
+                {
+                    // Il router, se il processo figlio muore, lascia value=unloaded e failed=true.
+                    if (st.TryGetProperty("failed", out var fallito) && fallito.ValueKind == JsonValueKind.True)
+                        return "failed";
+                    if (st.TryGetProperty("value", out var v)) return v.GetString();
+                }
             }
             return "unloaded";
         }

@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+# Un nuovo commit chiude il run precedente dello stesso ramo, così una prova
+# appesa non tiene occupato il runner fino al tetto delle sei ore.
+concurrency:
+  group: costruisci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -23,9 +29,8 @@ jobs:
         run: dotnet test Liquidino.sln -c Release --nologo
 
       - name: Prova con llama-server
+        timeout-minutes: 8
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: ./scripts/prova-motore.ps1
 
       - name: Installer

@@ -33,22 +33,29 @@ public class ProvaMotore
         var registro = new Registro(dati);
         var regista = new Regista(imp, registro, dati);
         using var tempo = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        string Dettaglio(string? motivo)
+        {
+            var log = Path.Combine(dati, "motore", "server.log");
+            var coda = File.Exists(log) ? File.ReadAllText(log) : "(niente server.log)";
+            if (coda.Length > 2500) coda = coda[^2500..];
+            return (motivo ?? "senza dettaglio") + "\n" + regista.Riassunto() + "\n" + coda;
+        }
         try
         {
-            Assert.True(regista.MotorePresente, regista.Riassunto());
-            Assert.True(regista.Presente(RuoloModello.Mani), regista.Riassunto());
+            Assert.True(regista.MotorePresente, Dettaglio(regista.Riassunto()));
+            Assert.True(regista.Presente(RuoloModello.Mani), Dettaglio(regista.Riassunto()));
             var acceso = await regista.Assicura(new[] { RuoloModello.Mani }, tempo.Token);
-            Assert.True(acceso, regista.UltimoErrore ?? "caricamento fallito senza dettaglio");
+            Assert.True(acceso, Dettaglio(regista.UltimoErrore ?? "caricamento fallito senza dettaglio"));
             Assert.Contains(RuoloModello.Mani, regista.Accesi);
 
             var risp = await regista.Completa(new RichiestaChat(
                 RuoloModello.Mani,
-                "Rispondi solo con la parola ciao.",
+                "Continue the story in one sentence.",
                 Array.Empty<(string, string)>(),
-                "Di' ciao.",
+                "Once upon a time",
                 null, null, null, null,
-                0, 16, true), tempo.Token);
-            Assert.False(string.IsNullOrWhiteSpace(risp?.Testo), "la chat è tornata vuota");
+                0.7, 32, true), tempo.Token);
+            Assert.False(string.IsNullOrWhiteSpace(risp?.Testo), Dettaglio("la chat è tornata vuota"));
 
             await regista.ScaricaTutto(tempo.Token);
             Assert.DoesNotContain(RuoloModello.Mani, regista.Accesi);
