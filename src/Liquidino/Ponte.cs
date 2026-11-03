@@ -1,0 +1,262 @@
+using System.Windows.Threading;
+using Liquidino.Nucleo;
+
+namespace Liquidino;
+
+/// <summary>Tiene insieme finestre, regista e dialogo. I modelli si accendono solo quando servono.</summary>
+public sealed class Ponte
+{
+    public static string Versione =>
+        typeof(Ponte).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+
+    public ImpostazioniUtente Impostazioni { get; }
+    public Mondo Mondo { get; }
+    public Registro Registro { get; }
+    public Regista Regista { get; }
+    public Dialogo Dialogo { get; }
+    public CicloAutonomo Ciclo { get; }
+    public Microfono Microfono { get; } = new();
+    public LettoreVoce Lettore { get; } = new();
+    public StatoCompagno Stato { get; private set; } = StatoCompagno.Dorme;
+    public string? EtichettaAggiornamento { get; private set; }
+
+    public event Action<StatoCompagno>? StatoCambiato;
+    public event Action? MondoCambiato;
+    public event Action<string>? Pensiero;
+    public event Action? PermessoCambiato;
+    public FinestraCasa? Casa { get; set; }
+
+    CancellationTokenSource _cts = new();
+    DispatcherTimer? _ciclo;
+    DispatcherTimer? _notte;
+    bool _cicloInCorso;
+    int _turni;
+
+    public Ponte(ImpostazioniUtente impostazioni)
+    {
+        Impostazioni = impostazioni;
+        Mondo = new Mondo();
+        Registro = new Registro();
+        Regista = new Regista(impostazioni, Registro);
+        Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()));
+        Ciclo = new CicloAutonomo(impostazioni, Mondo, Registro, Regista);
+        Lettore.Finito += () =>
+        {
+            if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
+        };
+    }
+
+    public void AvviaOrologi()
+    {
+        _ciclo = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti) };
+        _ciclo.Tick += async (_, _) =>
+        {
+            try { await CicloOrario(); }
+            catch (Exception e) { Registro.SegnaErrore("ciclo: " + e.Message); }
+        };
+        if (Impostazioni.CicloAutonomo) _ciclo.Start();
+
+        _notte = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _notte.Tick += async (_, _) =>
+        {
+            try { await ControllaNotte(); }
+            catch { /* la notte si ricontrolla fra un minuto */ }
+        };
+        _notte.Start();
+    }
+
+    public void ImpostaStato(StatoCompagno stato)
+    {
+        Stato = stato;
+        var disp = System.Windows.Application.Current?.Dispatcher;
+        try
+        {
+            if (disp is not null && !disp.CheckAccess()) disp.Invoke(() => StatoCambiato?.Invoke(stato));
+            else StatoCambiato?.Invoke(stato);
+        }
+        catch { /* la finestra si sta chiudendo */ }
+    }
+
+    public CancellationToken Token() => _cts.Token;
+
+    public void Annulla()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        _cts = new CancellationTokenSource();
+        if (Microfono.StaRegistrando) Microfono.Ferma();
+        Lettore.Ferma();
+        if (Stato is StatoCompagno.Pensa or StatoCompagno.Ascolta or StatoCompagno.Parla)
+            ImpostaStato(StatoCompagno.Sveglio);
+        Registro.Scrivi("annulla", "turno interrotto", "ok");
+    }
+
+    public void Stop()
+    {
+        Annulla();
+        Dialogo.DimenticaSessione();
+        ImpostaStato(StatoCompagno.Dorme);
+        _ = Regista.ScaricaTutto(CancellationToken.None);
+        Registro.Scrivi("stop", "STOP premuto: modelli scaricati", "ok");
+    }
+
+    public void AlternaPermesso()
+    {
+        Impostazioni.PermessoPc = !Impostazioni.PermessoPc;
+        Impostazioni.Salva();
+        Registro.Scrivi("permesso", Impostazioni.PermessoPc ? "permesso del PC acceso" : "permesso del PC spento", "ok");
+        PermessoCambiato?.Invoke();
+    }
+
+    public async Task<EsitoDialogo> Messaggio(string testo)
+    {
+        var ct = Token();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await Dialogo.Messaggio(testo, ct);
+            await Dopo(esito, ct);
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            ImpostaStato(StatoCompagno.Dorme);
+            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Dorme, false, false, false, false, false, null, null);
+        }
+    }
+
+    public async Task<EsitoDialogo> DaAudio(byte[] wav)
+    {
+        var ct = Token();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await Dialogo.DaAudio(wav, ct);
+            await Dopo(esito, ct);
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            ImpostaStato(StatoCompagno.Dorme);
+            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Dorme, false, false, false, false, false, null, null);
+        }
+    }
+
+    public async Task<EsitoDialogo> Guarda(string percorso)
+    {
+        var ct = Token();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await Dialogo.Guarda(percorso, ct);
+            await Dopo(esito, ct);
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            ImpostaStato(StatoCompagno.Sveglio);
+            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Sveglio, false, false, false, false, false, null, null);
+        }
+    }
+
+    async Task Dopo(EsitoDialogo esito, CancellationToken ct)
+    {
+        if (esito.FileCreato is not null || esito.MostraMondo) MondoCambiato?.Invoke();
+        if (esito.VuoiVoce && esito.Testo.Length > 0 && !ct.IsCancellationRequested)
+            await Parla(esito.Testo, ct);
+        if (esito.ScaricaDopo)
+        {
+            Dialogo.DimenticaSessione();
+            await Regista.ScaricaTutto(CancellationToken.None);
+            ImpostaStato(StatoCompagno.Dorme);
+            Registro.Scrivi("sonno", "è andato a dormire", "ok");
+        }
+        else if (Stato == StatoCompagno.Pensa)
+            ImpostaStato(esito.Stato);
+        _turni++;
+    }
+
+    public async Task Parla(string testo, CancellationToken ct)
+    {
+        if (!Regista.Presente(RuoloModello.Omni) || !Regista.MotorePresente) return;
+        try
+        {
+            ImpostaStato(StatoCompagno.Parla);
+            var bytes = await Regista.Sintetizza(TagliaPerVoce(testo), Impostazioni.Voce, ct);
+            if (bytes is null || bytes.Length < 44) return;
+            var path = Path.Combine(Path.GetTempPath(), "liquidino-voce.wav");
+            await File.WriteAllBytesAsync(path, bytes, ct);
+            Lettore.Suona(path);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e)
+        {
+            Registro.SegnaErrore("voce: " + e.Message);
+            if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
+        }
+    }
+
+    public async Task CicloOrario()
+    {
+        if (_cicloInCorso || !Impostazioni.CicloAutonomo) return;
+        if (Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla) return;
+        _cicloInCorso = true;
+        try
+        {
+            var esito = await Ciclo.Gira(DateTimeOffset.Now, MisuraPc.Occupato(), Token());
+            if (!esito.Fatto || esito.Testo is null) return;
+            MondoCambiato?.Invoke();
+            Pensiero?.Invoke(esito.Testo);
+            if (esito.Parla) await Parla(esito.Testo, Token());
+        }
+        finally { _cicloInCorso = false; }
+    }
+
+    async Task ControllaNotte()
+    {
+        if (!Impostazioni.ENotte(DateTimeOffset.Now)) return;
+        if (Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla) return;
+        if (Regista.Accesi.Count == 0 && Stato == StatoCompagno.Dorme) return;
+        Lettore.Ferma();
+        Dialogo.DimenticaSessione();
+        await Regista.ScaricaTutto(CancellationToken.None);
+        ImpostaStato(StatoCompagno.Dorme);
+        Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
+    }
+
+    public async Task RicaricaMotore()
+    {
+        Impostazioni.Salva();
+        await Regista.Ferma();
+        Regista.Rileggi();
+        _ciclo?.Stop();
+        if (_ciclo is not null)
+        {
+            _ciclo.Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti);
+            if (Impostazioni.CicloAutonomo) _ciclo.Start();
+        }
+    }
+
+    public void Chiudi()
+    {
+        _ciclo?.Stop();
+        _notte?.Stop();
+        try { Microfono.Dispose(); } catch { /* il microfono può essere già chiuso */ }
+        try { Lettore.Dispose(); } catch { /* il lettore può essere già chiuso */ }
+        try { Task.Run(() => Regista.Ferma()).GetAwaiter().GetResult(); } catch { /* in chiusura non si insiste */ }
+    }
+
+    public string RigaStato()
+    {
+        var modelli = Regista.Descrizione();
+        var fase = Impostazioni.InAmicizia(DateTimeOffset.Now) ? "fase di amicizia" : "può creare";
+        return Stati.Etichetta(Stato) + " · " + modelli + " · " + fase + " · errori " + Registro.Errori;
+    }
+
+    static string TagliaPerVoce(string testo)
+    {
+        var t = testo.Trim();
+        if (t.Length <= 500) return t;
+        return t[..500];
+    }
+}

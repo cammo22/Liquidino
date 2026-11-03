@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Liquidino.Nucleo</RootNamespace>
+    <AssemblyName>Liquidino.Nucleo</AssemblyName>
+    <Description>Il cervello di Liquidino, senza finestre: si può provare anche fuori da Windows.</Description>
+  </PropertyGroup>
+</Project>
