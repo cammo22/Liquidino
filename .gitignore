@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+dist/
+pubblicato/
+TestResults/
+*.user
+*.suo
+*.zip
+!risorse/**/*.png

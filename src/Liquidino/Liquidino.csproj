@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Liquidino</RootNamespace>
+    <AssemblyName>Liquidino</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationTitle>Liquidino</ApplicationTitle>
+    <Description>Compagno da desktop, offline, solo per uso personale.</Description>
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Liquidino.Nucleo\Liquidino.Nucleo.csproj" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\risorse\font\Orbitron-Regular.ttf" Link="font\Orbitron-Regular.ttf" />
+    <Resource Include="..\..\risorse\font\Orbitron-Bold.ttf" Link="font\Orbitron-Bold.ttf" />
+    <Resource Include="..\..\risorse\font\Rajdhani-Regular.ttf" Link="font\Rajdhani-Regular.ttf" />
+    <Resource Include="..\..\risorse\font\Rajdhani-Medium.ttf" Link="font\Rajdhani-Medium.ttf" />
+    <Resource Include="..\..\risorse\font\Rajdhani-Bold.ttf" Link="font\Rajdhani-Bold.ttf" />
+    <Resource Include="..\..\risorse\font\DSEG7Classic-Bold.ttf" Link="font\DSEG7Classic-Bold.ttf" />
+    <Content Include="..\..\risorse\avatar\*.*" Link="avatar\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\risorse\prompt\sistema.md" Link="prompt\sistema.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\risorse\catalogo\azioni.json" Link="catalogo\azioni.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\risorse\PROVENIENZA.md" Link="PROVENIENZA.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\CHANGELOG.md" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\README.md" Link="LEGGIMI.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\ROADMAP.md" Link="ROADMAP.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\risorse\font\OFL-orbitron.txt" Link="licenze\OFL-orbitron.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\risorse\font\OFL-rajdhani.txt" Link="licenze\OFL-rajdhani.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\risorse\font\OFL-dseg.txt" Link="licenze\OFL-dseg.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

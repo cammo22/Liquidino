@@ -1,0 +1,55 @@
+name: Costruisci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Codice
+        uses: actions/checkout@v4
+
+      - name: .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Prove e compilazione
+        run: dotnet test Liquidino.sln -c Release --nologo
+
+      - name: Pubblica l'eseguibile
+        run: dotnet publish src/Liquidino/Liquidino.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o pubblicato
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path pubblicato\* -DestinationPath Liquidino-win-x64.zip
+          if (-not (Test-Path pubblicato\Liquidino.exe)) { throw 'Manca Liquidino.exe' }
+
+      - name: Artefatto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Liquidino-win-x64
+          path: Liquidino-win-x64.zip
+          if-no-files-found: error
+
+      - name: Release di prova
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release view v0.1.0-prova
+          if ($LASTEXITCODE -ne 0) {
+            gh release create v0.1.0-prova Liquidino-win-x64.zip --title "Liquidino 0.1.0 (prova)" --notes-file NOTE-RELEASE.md --prerelease
+          } else {
+            gh release upload v0.1.0-prova Liquidino-win-x64.zip --clobber
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

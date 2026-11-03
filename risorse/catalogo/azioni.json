@@ -1,0 +1,94 @@
+{
+  "azioni": [
+    {
+      "nome": "rispondi",
+      "descrizione": "È una chiacchiera o una domanda. Non chiede di scrivere, ricordare o dormire.",
+      "istruzioni": "Rispondi a voce e per iscritto, col carattere scelto. Non dire di aver fatto cose che non hai fatto.",
+      "vuoleParametri": false
+    },
+    {
+      "nome": "crea_nota",
+      "descrizione": "Vuole una nota, un appunto o un'idea da segnare nel mondo di Liquidino.",
+      "istruzioni": "Compila solo i campi della nota. Il testo è quello che va ricordato, in italiano, senza aggiungere fatti inventati.",
+      "vuoleParametri": true,
+      "esempio": "Richiesta: «prendi nota: comprare il pane e il latte.» → titolo «Pane e latte», testo «Comprare il pane e il latte.», cartella note.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "titolo": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "testo": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "cartella": {
+            "type": "string",
+            "enum": [
+              "note",
+              "storie",
+              "idee",
+              "per-cammo"
+            ]
+          }
+        },
+        "required": [
+          "titolo",
+          "testo",
+          "cartella"
+        ]
+      }
+    },
+    {
+      "nome": "ricorda",
+      "descrizione": "Chiede di ricordare un fatto su di lui, in modo esplicito.",
+      "istruzioni": "Estrai solo il fatto da tenere. Non aggiungere altro.",
+      "vuoleParametri": true,
+      "esempio": "Richiesta: «ricordati che il mio colore preferito è il viola.» → fatto «Il colore preferito è il viola.»",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "fatto": {
+            "type": "string",
+            "maxLength": 400
+          }
+        },
+        "required": [
+          "fatto"
+        ]
+      }
+    },
+    {
+      "nome": "dimentica",
+      "descrizione": "Chiede di dimenticare un fatto che gli aveva fatto ricordare.",
+      "istruzioni": "Estrai le parole da cercare nella memoria, senza ripetere il resto della frase.",
+      "vuoleParametri": true,
+      "esempio": "Richiesta: «dimentica quello che ti ho detto sul dentista.» → fatto «dentista»",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "fatto": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "fatto"
+        ]
+      }
+    },
+    {
+      "nome": "mostra_creazioni",
+      "descrizione": "Vuole vedere le cose che Liquidino ha creato, le note o il suo mondo.",
+      "istruzioni": "Apri il pannello del mondo. Non inventare file.",
+      "vuoleParametri": false
+    },
+    {
+      "nome": "dormi",
+      "descrizione": "Vuole che Liquidino smetta, scarichi i modelli e dorma.",
+      "istruzioni": "Scarica i modelli e vai a dormire.",
+      "vuoleParametri": false
+    }
+  ]
+}
