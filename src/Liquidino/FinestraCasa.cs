@@ -65,7 +65,11 @@ public sealed class FinestraCasa : Window
             Margin = new Thickness(8, 0, 8, 0),
             Cursor = Cursors.Hand
         };
-        _aggiornamento.MouseLeftButtonUp += async (_, _) => await ControllaAggiornamenti();
+        _aggiornamento.MouseLeftButtonUp += async (_, _) => await ClicAggiornamento();
+        Action<string> ascoltaAgg = versione => SulFilo(() => MostraAggiornamento(versione));
+        Aggiornamenti.Trovata += ascoltaAgg;
+        Closed += (_, _) => Aggiornamenti.Trovata -= ascoltaAgg;
+        if (Aggiornamenti.Disponibile is { } gia) MostraAggiornamento(gia);
         var impostazioni = Stile.Bottone("Impostazioni");
         impostazioni.Click += (_, _) => new FinestraImpostazioni(_ponte).ShowDialog();
         var chiudi = Stile.Bottone("Chiudi");
@@ -237,8 +241,12 @@ public sealed class FinestraCasa : Window
 
     void SulFilo(Action azione)
     {
-        if (Dispatcher.CheckAccess()) azione();
-        else Dispatcher.BeginInvoke(azione);
+        try
+        {
+            if (Dispatcher.CheckAccess()) azione();
+            else Dispatcher.BeginInvoke(azione);
+        }
+        catch { /* la finestra si sta chiudendo */ }
     }
 
     void AggiornaParla()
@@ -313,29 +321,31 @@ public sealed class FinestraCasa : Window
         RiempiMondo();
     }
 
-    async Task ControllaAggiornamenti()
+    void MostraAggiornamento(string versione)
+    {
+        _aggiornamento.Text = "Aggiornamento " + versione + " disponibile";
+        _aggiornamento.Foreground = Stile.OroP;
+    }
+
+    async Task ClicAggiornamento()
     {
         _aggiornamento.Text = "Controllo…";
         try
         {
-            var tag = await Aggiornamenti.Cerca(CancellationToken.None);
-            if (Aggiornamenti.ENuova(tag, Ponte.Versione))
-            {
-                _aggiornamento.Text = "Aggiornamento " + tag + " disponibile";
-                _aggiornamento.Foreground = Stile.OroP;
-                Aggiungi("Liquidino", "C'è una versione nuova (" + tag + "). Questo fallo tu: scarica lo zip dalla pagina delle release e sostituisci la cartella. Io non mi aggiorno da solo.", false);
-            }
+            var detto = await Aggiornamenti.Installa();
+            Aggiungi("Liquidino", detto, false);
+            if (Aggiornamenti.Disponibile is { } v) MostraAggiornamento(v);
             else
             {
                 _aggiornamento.Text = "Aggiornamenti";
                 _aggiornamento.Foreground = Stile.InchiostroBarraP;
-                Aggiungi("Liquidino", "Sei già alla prova " + Ponte.Versione + ". Nessun aggiornamento.", false);
             }
         }
-        catch
+        catch (Exception e)
         {
             _aggiornamento.Text = "Aggiornamenti";
-            Aggiungi("Liquidino", "Non sono riuscito a controllare. Va bene così: non mando niente in rete, e senza rete non vedo le release.", false);
+            _aggiornamento.Foreground = Stile.InchiostroBarraP;
+            Aggiungi("Liquidino", "Questo fallo tu: non sono riuscito a aggiornare. " + e.Message, false);
         }
     }
 

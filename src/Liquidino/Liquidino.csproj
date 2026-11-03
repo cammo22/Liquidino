@@ -9,6 +9,7 @@
     <AssemblyName>Liquidino</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationTitle>Liquidino</ApplicationTitle>
+    <ApplicationIcon>..\..\risorse\icona.ico</ApplicationIcon>
     <Description>Compagno da desktop, offline, solo per uso personale.</Description>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
   </PropertyGroup>
@@ -16,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Liquidino.Nucleo\Liquidino.Nucleo.csproj" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>

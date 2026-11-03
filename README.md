@@ -2,15 +2,15 @@
 
 Compagno da desktop per Windows. Sta sul PC, parla italiano, non va in internet per pensare. I modelli sono i LFM3 di Liquid AI, eseguiti in locale con llama.cpp. Solo uso personale.
 
-## Avvio
+## Installazione
 
-1. Scarica `Liquidino-win-x64.zip` dalla [release di prova](https://github.com/cammo22/Liquidino/releases/tag/v0.1.1-prova).
-2. Estrai la cartella dove vuoi (va bene il Desktop). Chiudi la prova vecchia prima, se è ancora aperta.
-3. Doppio clic su `Liquidino.exe`.
-4. Al primo avvio scrivi il tuo nome, scegli il carattere e la voce (femminile o maschile).
-5. Sotto l'avatar ci sono i tasti, tutti con un clic: Parla (un clic ascolta, un altro ferma), Chat, Creazioni, Permesso, STOP, Dormi, Impostazioni. Ctrl+Spazio è la stessa cosa di Parla, non va tenuto premuto.
+1. Scarica `Liquidino-Setup.exe` dalla [release](https://github.com/cammo22/Liquidino/releases/latest). È il primo file.
+2. Chiudi Liquidino se è ancora aperto.
+3. Doppio clic sul Setup. Non chiede i diritti di amministratore.
+4. Apri Liquidino dall'icona sul desktop o dal menu Start.
+5. Al primo avvio: il tuo nome, il carattere e la voce. I tasti sotto l'avatar sono un clic. I modelli restano in `C:\Users\cammo\LiquidinoProva` (Impostazioni, se la cartella è un'altra): non sono dentro l'installer.
 
-Il cervello non è dentro lo zip. Di solito sta già in `C:\Users\cammo\LiquidinoProva` (llama.cpp e i GGUF). Se è altrove: tasto destro sull'avatar → Impostazioni, e indica la cartella. Senza quei file Liquidino si apre lo stesso, scrive note e te lo dice.
+Se manca un modello, Liquidino lo dice. Non lo scarica. L'unica cosa che guarda in rete è se c'è un aggiornamento: lo scrive nella barra in alto della chat.
 
 ## Cosa fa questa prova
 

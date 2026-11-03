@@ -1,8 +1,9 @@
 bin/
 obj/
+Releases/
+pubblicato/
 .vs/
 dist/
-pubblicato/
 TestResults/
 *.user
 *.suo

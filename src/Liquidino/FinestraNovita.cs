@@ -54,29 +54,3 @@ public sealed class FinestraNovita : Window
     }
 }
 
-/// <summary>L'unico contatto con la rete: lo chiedi tu, dal tasto in alto, e non porta via nessun dato tuo.</summary>
-public static class Aggiornamenti
-{
-    public static async Task<string?> Cerca(CancellationToken ct)
-    {
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Liquidino");
-        var json = await http.GetStringAsync("https://api.github.com/repos/cammo22/Liquidino/releases/latest", ct);
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        return doc.RootElement.TryGetProperty("tag_name", out var tag) ? tag.GetString() : null;
-    }
-
-    public static bool ENuova(string? tag, string nostra)
-    {
-        if (string.IsNullOrWhiteSpace(tag)) return false;
-        var loro = tag.Trim().TrimStart('v').Split('-', '+')[0].Split('.');
-        var nostri = nostra.Split('.', '-');
-        for (var i = 0; i < 3; i++)
-        {
-            var a = loro.Length > i && int.TryParse(loro[i], out var x) ? x : 0;
-            var b = nostri.Length > i && int.TryParse(nostri[i], out var y) ? y : 0;
-            if (a != b) return a > b;
-        }
-        return false;
-    }
-}

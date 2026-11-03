@@ -19,37 +19,34 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Prove e compilazione
+      - name: Prove
         run: dotnet test Liquidino.sln -c Release --nologo
 
-      - name: Pubblica l'eseguibile
-        run: dotnet publish src/Liquidino/Liquidino.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o pubblicato
-
-      - name: Zip
+      - name: Installer
         shell: pwsh
-        run: |
-          Compress-Archive -Path pubblicato\* -DestinationPath Liquidino-win-x64.zip
-          if (-not (Test-Path pubblicato\Liquidino.exe)) { throw 'Manca Liquidino.exe' }
+        run: ./scripts/pacchetto.ps1
 
       - name: Artefatto
         uses: actions/upload-artifact@v4
         with:
-          name: Liquidino-win-x64
-          path: Liquidino-win-x64.zip
+          name: Liquidino-Setup
+          path: |
+            Releases/Liquidino-Setup.exe
+            Releases/*.nupkg
+            Releases/releases.win.json
           if-no-files-found: error
 
-      - name: Release di prova
+      - name: Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $ErrorActionPreference = 'Continue'
+          $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $false
-          gh release view v0.1.1-prova
-          if ($LASTEXITCODE -ne 0) {
-            gh release create v0.1.1-prova Liquidino-win-x64.zip --title "Liquidino 0.1.1 (prova)" --notes-file NOTE-RELEASE.md --prerelease
-          } else {
-            gh release upload v0.1.1-prova Liquidino-win-x64.zip --clobber
-          }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$p = Get-Content Directory.Build.props
+          $v = $p.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $testo = ./scripts/note-rilascio.ps1 -Changelog (Get-Content CHANGELOG.md -Raw) -Versione "$v"
+          $fileNote = Join-Path $env:RUNNER_TEMP 'liquidino-note.md'
+          [IO.File]::WriteAllText($fileNote, $testo.Trim() + "`n")
+          ./scripts/pubblica-release.ps1 -Versione "$v" -Note $fileNote -Cartella (Resolve-Path Releases)
