@@ -7,12 +7,9 @@ $lavoro = Join-Path $env:RUNNER_TEMP "liquidino-e2e"
 if (-not $env:RUNNER_TEMP) { $lavoro = Join-Path $env:TEMP "liquidino-e2e" }
 New-Item -ItemType Directory -Force -Path $lavoro, (Join-Path $lavoro "llama"), (Join-Path $lavoro "modelli") | Out-Null
 
-$zip = Join-Path $lavoro "llama-cpu.zip"
-$tag = gh api repos/ggml-org/llama.cpp/releases/latest --jq .tag_name
-if ($LASTEXITCODE -ne 0 -or -not $tag) { throw "non leggo l'ultima release di llama.cpp" }
-$assets = gh api "repos/ggml-org/llama.cpp/releases/tags/$tag" --jq ".assets[].name"
-$nome = $assets | Where-Object { $_ -like "*win-cpu-x64.zip" } | Select-Object -First 1
-if (-not $nome) { throw "nella release $tag non c'è un pacchetto win-cpu-x64" }
+# b12078 è la stessa generazione del PC di prova: ha il router e /models/load.
+$tag = "b12078"
+$nome = "llama-$tag-bin-win-cpu-x64.zip"
 Write-Host "Scarico llama.cpp $tag / $nome"
 gh release download $tag --repo ggml-org/llama.cpp --pattern $nome --dir $lavoro --clobber
 if ($LASTEXITCODE -ne 0) { throw "download llama.cpp" }
