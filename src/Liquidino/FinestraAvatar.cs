@@ -415,9 +415,9 @@ public sealed class FinestraAvatar : Window
             MostraTasti();
             MostraBolla(esito.Testo, new[]
             {
-                new SceltaBolla("Sì", () => { _domandaAperta = false; _ = _ponte.Messaggio("sì"); }),
-                new SceltaBolla("No", () => { _domandaAperta = false; _ = _ponte.Messaggio("no"); })
-            }, resta = true);
+                new SceltaBolla("Sì", _ => { _domandaAperta = false; _ = _ponte.Messaggio("sì"); }),
+                new SceltaBolla("No", _ => { _domandaAperta = false; _ = _ponte.Messaggio("no"); })
+            }, resta: true);
             return;
         }
         _domandaAperta = false;
@@ -437,9 +437,9 @@ public sealed class FinestraAvatar : Window
                 var detto = (testo ?? "").Trim();
                 if (detto.Length == 0) return;
                 _ = _ponte.Messaggio("prendi nota: " + detto);
-            }, campo: true),
+            }, Campo: true),
             new SceltaBolla("Lascia", _ => _domandaAperta = false)
-        }, resta = true);
+        }, resta: true);
     }
 
     void MostraBolla(string testo, IReadOnlyList<SceltaBolla>? scelte = null, bool resta = false)
