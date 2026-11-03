@@ -38,7 +38,9 @@ public class ProvaMotore
             var log = Path.Combine(dati, "motore", "server.log");
             var coda = File.Exists(log) ? File.ReadAllText(log) : "(niente server.log)";
             if (coda.Length > 2500) coda = coda[^2500..];
-            return (motivo ?? "senza dettaglio") + "\n" + regista.Riassunto() + "\n" + coda;
+            var ini = Path.Combine(dati, "motore", "modelli.ini");
+            var preset = File.Exists(ini) ? File.ReadAllText(ini) : "(niente modelli.ini)";
+            return (motivo ?? "senza dettaglio") + "\n" + regista.Riassunto() + "\n" + preset + "\n" + coda;
         }
         try
         {

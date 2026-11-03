@@ -27,7 +27,13 @@ public sealed class ClienteLlama : IDisposable
 
     public ClienteLlama(int porta)
     {
-        _http = new HttpClient
+        // Solo questo PC: niente proxy di sistema, altrimenti 127.0.0.1 resta in attesa del proxy.
+        var prese = new SocketsHttpHandler
+        {
+            UseProxy = false,
+            ConnectTimeout = TimeSpan.FromSeconds(2)
+        };
+        _http = new HttpClient(prese)
         {
             BaseAddress = new Uri($"http://127.0.0.1:{porta}/"),
             Timeout = Timeout.InfiniteTimeSpan

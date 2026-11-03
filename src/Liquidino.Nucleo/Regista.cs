@@ -78,11 +78,7 @@ public sealed class Regista : IRegista
     public void UccidiSubito()
     {
         AnnullaOperazioni();
-        try
-        {
-            if (_processo is { HasExited: false }) _processo.Kill(entireProcessTree: true);
-        }
-        catch { /* già chiuso */ }
+        UccidiProcesso(_processo);
         UccidiLlamaSullaPorta(_imp.Porta);
         try { _cliente?.Dispose(); } catch { /* già chiuso */ }
         _cliente = null;
@@ -325,10 +321,7 @@ public sealed class Regista : IRegista
         }
         UltimoErrore = "llama-server non si è acceso. Guarda motore/server.log.";
         _registro.SegnaErrore(UltimoErrore);
-        if (_avviatoDaNoi && _processo is { HasExited: false })
-        {
-            try { _processo.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
-        }
+        if (_avviatoDaNoi) UccidiProcesso(_processo);
         _cliente?.Dispose();
         _cliente = null;
         _processo = null;
@@ -377,15 +370,38 @@ public sealed class Regista : IRegista
         _registro.Scrivi("modello", "scaricato " + NomiModello.Etichetta(ruolo), "ok", ruolo.ToString());
     }
 
+    /// <summary>Chiude il processo. Il kill dell'albero, se resta fermo, non blocca chi ha chiesto di uscire.</summary>
+    static void UccidiProcesso(Process? processo)
+    {
+        if (processo is null) return;
+        try
+        {
+            if (processo.HasExited) return;
+            var fatto = Task.Run(() =>
+            {
+                try { processo.Kill(entireProcessTree: true); }
+                catch
+                {
+                    try { processo.Kill(); } catch { /* già chiuso */ }
+                }
+            });
+            if (!fatto.Wait(4000))
+            {
+                try { processo.Kill(); } catch { /* già chiuso */ }
+            }
+        }
+        catch { /* già chiuso */ }
+    }
+
     static readonly object LucchettoLog = new();
 
     static async Task Pompa(StreamReader letto, string log)
     {
         try
         {
-            while (!letto.EndOfStream)
+            while (true)
             {
-                var riga = await letto.ReadLineAsync();
+                var riga = await letto.ReadLineAsync().ConfigureAwait(false);
                 if (riga is null) break;
                 lock (LucchettoLog) File.AppendAllText(log, riga + Environment.NewLine);
             }
