@@ -50,6 +50,9 @@ public sealed class Regista : IRegista
 
     public string? UltimoErrore { get; private set; }
 
+    /// <summary>Il llama-server trovato nella cartella del motore, o null.</summary>
+    public string? Eseguibile => _rilevazione.Eseguibile;
+
     public string Descrizione()
     {
         if (!MotorePresente) return "motore non trovato";
@@ -206,6 +209,73 @@ public sealed class Regista : IRegista
             return await _cliente.Chat(NomiModello.IdDi(richiesta.Modello), richiesta, legati.Token).ConfigureAwait(false);
         }
         finally { _porta.Release(); }
+    }
+
+    /// <summary>
+    /// La prova di carico: riempie il contesto delle mani fino a circa «voluti» token e guarda quanti ne ha letti il motore.
+    /// Prima misura quanti caratteri vale un token, con una frase corta e un campione. Poi prova a salvare lo slot su disco.
+    /// </summary>
+    public async Task<Riempimento> ProvaRiempimento(int voluti, CancellationToken ct)
+    {
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!Presente(RuoloModello.Mani)) return new Riempimento(null, null, "manca LFM3-1.7B (le mani)");
+        if (!await Assicura([RuoloModello.Mani], legati.Token).ConfigureAwait(false))
+            return new Riempimento(null, null, UltimoErrore ?? "le mani non si sono accese");
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return new Riempimento(null, null, "il motore è occupato");
+        try
+        {
+            if (_cliente is null) return new Riempimento(null, null, "llama-server non risponde");
+            var id = NomiModello.IdDi(RuoloModello.Mani);
+            async Task<int?> Leggi(string testo, TimeSpan tempo)
+            {
+                var risp = await _cliente!.Chat(id, new RichiestaChat(
+                    RuoloModello.Mani, "Rispondi con una parola.", [], testo, null, null, null, null, 0, 1, true), legati.Token, tempo).ConfigureAwait(false);
+                return risp.TokenPrompt;
+            }
+            var base0 = await Leggi("ok", TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+            var campione = ProvaContesto.Riempitivo(ProvaContesto.Campione);
+            var base1 = await Leggi(campione, TimeSpan.FromSeconds(90)).ConfigureAwait(false);
+            if (base0 is not int b0 || base1 is not int b1 || b1 <= b0)
+                return new Riempimento(null, null, "il motore non dice quanti token ha letto");
+            var caratteri = ProvaContesto.CaratteriPer(voluti, b0, b1, campione.Length);
+            var letti = await Leggi(ProvaContesto.Riempitivo(caratteri), TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+            _registro.Scrivi("contesto", "prova di carico: voluti " + voluti + ", letti " + (letti?.ToString() ?? "?"), letti is null ? "errore" : "ok");
+            bool? slot = null;
+            if (letti is not null) slot = await ProvaSlot(id, legati.Token).ConfigureAwait(false);
+            return new Riempimento(letti, slot, letti is null ? "il motore non ha detto quanti token ha letto" : null);
+        }
+        catch (OperationCanceledException) when (!legati.IsCancellationRequested)
+        {
+            return new Riempimento(null, null, "tempo scaduto");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e)
+        {
+            return new Riempimento(null, null, e.Message);
+        }
+        finally { _porta.Release(); }
+    }
+
+    async Task<bool> ProvaSlot(string id, CancellationToken ct)
+    {
+        const string nome = "prova-contesto.bin";
+        var file = Path.Combine(Percorsi.Slot(_radiceDati), nome);
+        try
+        {
+            if (File.Exists(file)) File.Delete(file);
+            await _cliente!.SalvaSlot(id, nome, ct, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            var salvato = File.Exists(file) && new FileInfo(file).Length > 0;
+            _registro.Scrivi("contesto", salvato ? "lo slot si salva su disco" : "lo slot non si è salvato su disco", salvato ? "ok" : "vuoto");
+            return salvato;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return false; }
+        catch (OperationCanceledException) { throw; }
+        catch { return false; }
+        finally
+        {
+            try { if (File.Exists(file)) File.Delete(file); } catch { /* si cancella la prossima volta */ }
+        }
     }
 
     public async Task<string?> Trascrivi(byte[] wav, CancellationToken ct)

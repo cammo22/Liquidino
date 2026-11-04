@@ -429,6 +429,61 @@ public sealed class Ponte
         }
     }
 
+    /// <summary>
+    /// La prova di carico vera: per ogni gradino riaccende il motore con quel contesto e lo riempie al 90%.
+    /// Tiene il primo che regge. Se nessuno regge, o premi STOP, rimette il contesto di prima.
+    /// </summary>
+    public async Task<EsitoProvaContesto> ProvaContestoVera(Action<string> passo)
+    {
+        if (!Regista.MotorePresente || !Regista.Presente(RuoloModello.Mani))
+            return new EsitoProvaContesto(false, 0, 0, null, ["Per la prova servono llama-server e LFM3-1.7B nella cartella del motore."]);
+        void Passo(string testo) => SulFiloUi(() => passo(testo));
+        SegnaGesto();
+        var prima = Impostazioni.ContestoMani;
+        var ct = Token();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await ProvaContesto.Esegui(SceltaContesto.ObiettivoMani, async (contesto, t) =>
+            {
+                Impostazioni.ContestoMani = contesto;
+                await RicaricaMotore().ConfigureAwait(false);
+                SegnaGesto();
+                return await Regista.ProvaRiempimento(ProvaContesto.Obiettivo(contesto), t).ConfigureAwait(false);
+            }, Passo, ct);
+            if (esito.Riuscita)
+            {
+                Impostazioni.ContestoMani = esito.Contesto;
+                Impostazioni.FraseContesto = esito.Frase();
+                await Task.Run(Impostazioni.Salva);
+            }
+            else
+            {
+                Impostazioni.ContestoMani = prima;
+                await RicaricaMotore();
+            }
+            Registro.Scrivi("contesto", esito.Frase(), esito.Riuscita ? "ok" : "errore");
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            Impostazioni.ContestoMani = prima;
+            try { await RicaricaMotore(); } catch { /* il motore ripartirà al prossimo messaggio */ }
+            return new EsitoProvaContesto(false, 0, 0, null, ["Prova fermata con STOP o Esc: ho rimesso il contesto di prima."]);
+        }
+        catch (Exception e)
+        {
+            Impostazioni.ContestoMani = prima;
+            Registro.SegnaErrore("prova di carico: " + e.Message);
+            try { await RicaricaMotore(); } catch { /* il motore ripartirà al prossimo messaggio */ }
+            return new EsitoProvaContesto(false, 0, 0, null, ["La prova si è interrotta: " + e.Message]);
+        }
+        finally
+        {
+            if (Stato == StatoCompagno.Pensa) ImpostaStato(StatoCompagno.Sveglio);
+        }
+    }
+
     public async Task RicaricaMotore()
     {
         await Task.Run(() => Impostazioni.Salva()).ConfigureAwait(false);

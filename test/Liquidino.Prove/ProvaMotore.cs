@@ -59,6 +59,12 @@ public class ProvaMotore
                 0.7, 32, true), tempo.Token);
             Assert.False(string.IsNullOrWhiteSpace(risp?.Testo), Dettaglio("la chat è tornata vuota"));
 
+            // Prova di carico vera, in piccolo: 2048 di contesto, ne chiediamo circa 1500.
+            var riempito = await regista.ProvaRiempimento(1500, tempo.Token);
+            File.WriteAllText(Path.Combine(radice, "esito-riempimento.txt"),
+                "token letti: " + (riempito.Token?.ToString() ?? "?") + ", slot su disco: " + (riempito.SlotSalvato?.ToString() ?? "?") + ", errore: " + (riempito.Errore ?? "nessuno"));
+            Assert.True(riempito.Token is >= 1000 and <= 2048, Dettaglio("prova di carico: " + (riempito.Token?.ToString() ?? riempito.Errore)));
+
             await regista.ScaricaTutto(tempo.Token);
             Assert.DoesNotContain(RuoloModello.Mani, regista.Accesi);
 

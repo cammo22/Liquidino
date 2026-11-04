@@ -69,6 +69,11 @@ Write-Host "---- stdout ----"
 try { Write-Host $stdout.Result } catch { Write-Host $_.Exception.Message }
 Write-Host "---- stderr ----"
 try { Write-Host $stderr.Result } catch { Write-Host $_.Exception.Message }
+$esitoRiempimento = Join-Path $lavoro "esito-riempimento.txt"
+if (Test-Path $esitoRiempimento) {
+  Write-Host "---- prova di carico ----"
+  Get-Content $esitoRiempimento | ForEach-Object { Write-Host $_ }
+}
 if (Test-Path $serverLog) {
   Write-Host "---- server.log intero ----"
   Get-Content $serverLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }

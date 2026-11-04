@@ -18,7 +18,8 @@ public sealed record RichiestaChat(
     bool SpegniRagionamento,
     string? TipoImmagine = null);
 
-public sealed record RispostaChat(string Testo, string? ArgomentiStrumento);
+/// <summary>TokenPrompt è usage.prompt_tokens del motore: quanti token ha letto davvero.</summary>
+public sealed record RispostaChat(string Testo, string? ArgomentiStrumento, int? TokenPrompt = null);
 
 /// <summary>Parla solo con llama-server su 127.0.0.1. Niente altre reti.</summary>
 public sealed class ClienteLlama : IDisposable
@@ -96,9 +97,9 @@ public sealed class ClienteLlama : IDisposable
         await Posta("models/unload", new { model = id }, limite.Token).ConfigureAwait(false);
     }
 
-    public async Task SalvaSlot(string id, string file, CancellationToken ct)
+    public async Task SalvaSlot(string id, string file, CancellationToken ct, TimeSpan? tempo = null)
     {
-        using var limite = Limite(ct, TempoScarico);
+        using var limite = Limite(ct, tempo ?? TempoScarico);
         await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
     }
 
@@ -162,7 +163,7 @@ public sealed class ClienteLlama : IDisposable
         return risp.corpo;
     }
 
-    public async Task<RispostaChat> Chat(string idModello, RichiestaChat richiesta, CancellationToken ct)
+    public async Task<RispostaChat> Chat(string idModello, RichiestaChat richiesta, CancellationToken ct, TimeSpan? tempo = null)
     {
         var messaggi = new List<object>
         {
@@ -230,7 +231,7 @@ public sealed class ClienteLlama : IDisposable
                 payload["tool_choice"] = new { type = "function", function = new { name = richiesta.StrumentoNome } };
             }
 
-            using var limite = Limite(ct, TempoChat);
+            using var limite = Limite(ct, tempo ?? TempoChat);
             var risp = await Posta("v1/chat/completions", payload, limite.Token).ConfigureAwait(false);
             if (!risp.ok) throw new InvalidOperationException("La chat non ha risposto: " + Taglia(risp.corpo));
             return LeggiChat(risp.corpo);
@@ -261,7 +262,11 @@ public sealed class ClienteLlama : IDisposable
                 break;
             }
         }
-        return new RispostaChat(Testo.PulisciRisposta(testo), argomenti);
+        int? letti = null;
+        if (doc.RootElement.TryGetProperty("usage", out var uso) && uso.ValueKind == JsonValueKind.Object
+            && uso.TryGetProperty("prompt_tokens", out var pt) && pt.TryGetInt32(out var n))
+            letti = n;
+        return new RispostaChat(Testo.PulisciRisposta(testo), argomenti, letti);
     }
 
     public async Task<byte[]> Sintetizza(string idModello, string testo, string voce, CancellationToken ct)
