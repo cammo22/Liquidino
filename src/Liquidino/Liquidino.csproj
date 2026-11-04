@@ -27,6 +27,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Liquidino.Nucleo\Liquidino.Nucleo.csproj" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Voci di Windows (SAPI), già sul PC: il piano B quando Omni non c'è. Niente rete. -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 

@@ -21,6 +21,8 @@ public sealed class ImpostazioniUtente
     public DateTimeOffset PrimoAvvio { get; set; } = DateTimeOffset.Now;
     public bool PermessoPc { get; set; }
     public bool CompagniaVocale { get; set; } = true;
+    /// <summary>Se Omni non c'è o non parla, leggo con le voci italiane di Windows.</summary>
+    public bool VoceWindows { get; set; } = true;
     public int CicliFatti { get; set; }
     public double? AvatarX { get; set; }
     public double? AvatarY { get; set; }

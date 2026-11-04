@@ -15,6 +15,7 @@ public sealed class FinestraImpostazioni : Window
     readonly CheckBox _ciclo;
     readonly ComboBox _carattere;
     readonly ComboBox _voce;
+    readonly CheckBox _voceWindows;
     readonly WrapPanel _strumenti;
     readonly TextBlock _esito;
 
@@ -84,6 +85,22 @@ public sealed class FinestraImpostazioni : Window
         _voce.Items.Add("maschile");
         _voce.SelectedIndex = imp.Voce == "male" ? 1 : 0;
         pila.Children.Add(_voce);
+        _voceWindows = new CheckBox
+        {
+            Content = "Se Omni non c'è o non parla, leggo con le voci italiane di Windows",
+            IsChecked = imp.VoceWindows,
+            Foreground = Stile.Inchiostro,
+            FontFamily = Stile.Testo,
+            FontSize = 16,
+            Margin = new Thickness(0, 8, 0, 2)
+        };
+        pila.Children.Add(_voceWindows);
+        var descrizioneVoci = Stile.Riga("Cerco le voci…", secondario: true);
+        pila.Children.Add(descrizioneVoci);
+        _ = Task.Run(VoceWindows.Descrizione).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully) descrizioneVoci.Text = t.Result;
+        }, TaskScheduler.FromCurrentSynchronizationContext());
 
         var misura = Stile.Bottone("Misura di nuovo il PC");
         misura.HorizontalAlignment = HorizontalAlignment.Left;
@@ -96,14 +113,25 @@ public sealed class FinestraImpostazioni : Window
         pila.Children.Add(misura);
         pila.Children.Add(Stile.Riga("Contesto attuale: mani " + imp.ContestoMani + ", Omni " + imp.ContestoOmni + ", d1 " + imp.ContestoD1 + ".", secondario: true));
 
+        _esito = Stile.Riga("", secondario: true);
         pila.Children.Add(Etichetta("Strumenti"));
         _strumenti = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
         var dettagli = Stile.Bottone("Copia dettagli errore");
         dettagli.Margin = new Thickness(0, 4, 8, 4);
         dettagli.Click += (_, _) => CopiaDettagli();
         _strumenti.Children.Add(dettagli);
+        var provaVoce = Stile.Bottone("Prova la voce");
+        provaVoce.Margin = new Thickness(0, 4, 8, 4);
+        provaVoce.Click += async (_, _) =>
+        {
+            ApplicaVoce();
+            _esito.Text = "Provo a leggere una frase…";
+            try { await _ponte.Parla("Ciao, sono Liquidino. Mi senti bene?", _ponte.Token()); }
+            catch (OperationCanceledException) { /* STOP: va bene così */ }
+            _esito.Text = "Se non hai sentito niente, guarda il volume e l'uscita audio. Il testo resta comunque in chat.";
+        };
+        _strumenti.Children.Add(provaVoce);
         pila.Children.Add(_strumenti);
-        _esito = Stile.Riga("", secondario: true);
         pila.Children.Add(_esito);
 
         var tasti = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 18, 0, 0) };
@@ -143,6 +171,13 @@ public sealed class FinestraImpostazioni : Window
         Margin = new Thickness(0, 10, 0, 4)
     };
 
+    void ApplicaVoce()
+    {
+        var imp = _ponte.Impostazioni;
+        imp.Voce = _voce.SelectedIndex == 1 ? "male" : "female";
+        imp.VoceWindows = _voceWindows.IsChecked == true;
+    }
+
     void CopiaDettagli()
     {
         var sistema = Environment.OSVersion.VersionString + (Environment.Is64BitOperatingSystem ? ", 64 bit" : "");
@@ -172,7 +207,7 @@ public sealed class FinestraImpostazioni : Window
         imp.CicloAutonomo = _ciclo.IsChecked == true;
         if (int.TryParse(_minuti.Text.Trim(), out var minuti)) imp.CicloMinuti = Math.Clamp(minuti, 5, 24 * 60);
         if (_carattere.SelectedItem is string carattere) imp.Carattere = carattere;
-        imp.Voce = _voce.SelectedIndex == 1 ? "male" : "female";
+        ApplicaVoce();
         await _ponte.RicaricaMotore();
         Close();
     }

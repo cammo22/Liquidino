@@ -272,25 +272,47 @@ public sealed class Ponte
         _turni++;
     }
 
+    /// <summary>
+    /// Legge la frase: Omni se c'è, altrimenti (o se la sua voce non esce) le voci italiane di Windows.
+    /// Se non esce niente torna sveglio: non resta fermo nello stato «parla».
+    /// </summary>
     public async Task Parla(string testo, CancellationToken ct)
     {
-        if (!Regista.Presente(RuoloModello.Omni) || !Regista.MotorePresente) return;
+        var frase = TagliaPerVoce(testo);
+        var motore = SceltaVoce.Scegli(Regista.MotorePresente, Regista.Presente(RuoloModello.Omni), Impostazioni.VoceWindows, VoceWindows.Disponibile);
+        if (motore == MotoreVoce.Nessuno || frase.Length == 0) return;
+        var suona = false;
         try
         {
             ImpostaStato(StatoCompagno.Parla);
-            var bytes = await Regista.Sintetizza(TagliaPerVoce(testo), Impostazioni.Voce, ct);
-            if (bytes is null || bytes.Length < 44) return;
+            byte[]? bytes = null;
+            if (motore == MotoreVoce.Omni)
+            {
+                try { bytes = await Regista.Sintetizza(frase, Impostazioni.Voce, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception e) { Registro.SegnaErrore("voce di Omni: " + e.Message); }
+                if (bytes is not { Length: >= 44 })
+                    motore = SceltaVoce.DopoErrore(Impostazioni.VoceWindows, VoceWindows.Disponibile);
+            }
+            if (motore == MotoreVoce.Windows)
+                bytes = await Task.Run(() => VoceWindows.Sintetizza(frase, Impostazioni.Voce), ct);
+            if (bytes is not { Length: >= 44 }) return;
             Lettore.Ferma();
             var path = Path.Combine(Path.GetTempPath(), "liquidino-voce-" + Guid.NewGuid().ToString("N") + ".wav");
             await File.WriteAllBytesAsync(path, bytes, ct);
             Microfono.SilenziaFino(DateTime.UtcNow.AddMinutes(2));
             Lettore.Suona(path);
+            suona = true;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e)
         {
             Registro.SegnaErrore("voce: " + e.Message);
-            if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
+        }
+        finally
+        {
+            // Mentre suona, lo stato torna sveglio quando il lettore finisce.
+            if (!suona && Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
         }
     }
 
