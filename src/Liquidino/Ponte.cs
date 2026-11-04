@@ -323,6 +323,7 @@ public sealed class Ponte
             await Regista.ScaricaTutto(CancellationToken.None);
             ImpostaStato(StatoCompagno.Dorme);
             Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
+            ScriviDiario(ora);
             return;
         }
         if (Quiete.PuoScaricare(lavora, Regista.Accesi.Count, _ultimoGesto, ora))
@@ -332,21 +333,78 @@ public sealed class Ponte
         }
     }
 
+    /// <summary>Il diario della giornata appena finita, quando va a dormire. Un errore qui non sveglia nessuno.</summary>
+    void ScriviDiario(DateTimeOffset ora)
+    {
+        try
+        {
+            var giorno = Diario.GiornoDaRaccontare(ora, Impostazioni.OraNotteFine);
+            var percorso = Diario.Scrivi(Mondo, giorno, ora);
+            Registro.Scrivi("diario", Path.GetFileName(percorso), "ok");
+            SulFiloUi(() => MondoCambiato?.Invoke());
+        }
+        catch (Exception e) { Registro.SegnaErrore("diario: " + e.Message); }
+    }
+
+    /// <summary>Rifà un pensiero con la tua indicazione. STOP o Esc lo fermano.</summary>
+    public async Task<EsitoCiclo> Rifai(string percorso, string indicazione)
+    {
+        SegnaGesto();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await Ciclo.Rifai(percorso, indicazione, Token());
+            if (esito.Fatto) SulFiloUi(() => MondoCambiato?.Invoke());
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            return new EsitoCiclo(false, "è stato premuto STOP o Esc, quindi non l'ho rifatto", null, null, false);
+        }
+        finally
+        {
+            if (Stato == StatoCompagno.Pensa) ImpostaStato(StatoCompagno.Sveglio);
+        }
+    }
+
+    /// <summary>Il pensiero chiesto da te. Non lancia eccezioni: dal tasto non deve uscire la finestra d'errore.</summary>
     public async Task PensieroAdesso()
     {
         SegnaGesto();
-        var esito = await Ciclo.Gira(DateTimeOffset.Now, MisuraPc.Occupato(), Token());
-        if (!esito.Fatto || esito.Testo is null)
+        if (_cicloInCorso)
         {
-            Annuncia(string.IsNullOrWhiteSpace(esito.Motivo) ? "Adesso non ho un pensiero." : esito.Motivo);
+            Annuncia("Sto già scrivendo un pensiero.");
             return;
         }
-        SulFiloUi(() =>
+        _cicloInCorso = true;
+        var ct = Token();
+        try
         {
-            MondoCambiato?.Invoke();
-            Pensiero?.Invoke(esito.Testo);
-        });
-        if (esito.Parla) await Parla(esito.Testo, Token());
+            ImpostaStato(StatoCompagno.Pensa);
+            var esito = await Ciclo.Gira(DateTimeOffset.Now, false, ct, richiesto: true);
+            if (!esito.Fatto || esito.Testo is null)
+            {
+                Annuncia(string.IsNullOrWhiteSpace(esito.Motivo) ? "Adesso non ho un pensiero." : "Adesso non scrivo: " + esito.Motivo + ".");
+                return;
+            }
+            SulFiloUi(() =>
+            {
+                MondoCambiato?.Invoke();
+                Pensiero?.Invoke(esito.Testo);
+            });
+            if (esito.Parla) await Parla(esito.Testo, ct);
+        }
+        catch (OperationCanceledException) { Annuncia("Mi sono fermato: STOP o Esc."); }
+        catch (Exception e)
+        {
+            Registro.SegnaErrore("pensiero: " + e.Message);
+            Annuncia("Questo fallo tu: il pensiero non è uscito. " + e.Message);
+        }
+        finally
+        {
+            _cicloInCorso = false;
+            if (Stato == StatoCompagno.Pensa) ImpostaStato(StatoCompagno.Sveglio);
+        }
     }
 
     public async Task RicaricaMotore()

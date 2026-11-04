@@ -30,6 +30,7 @@ public sealed class Mondo
         foreach (var c in Cartelle)
             Directory.CreateDirectory(Path.Combine(Radice, c));
         Directory.CreateDirectory(Path.Combine(Radice, "cestino"));
+        Directory.CreateDirectory(Path.Combine(Radice, "diario"));
         Directory.CreateDirectory(Path.Combine(Radice, "memoria"));
         Directory.CreateDirectory(Path.Combine(Radice, "registro"));
         var mem = PercorsoMemoria();
@@ -51,8 +52,11 @@ public sealed class Mondo
         titolo = string.IsNullOrWhiteSpace(titolo) ? "Nota" : titolo.Trim();
         testo = (testo ?? "").Trim();
         if (testo.Length > 4000) testo = testo[..4000];
-        var nome = DateTime.Now.ToString("yyyy-MM-dd-HHmmss") + "-" + Testo.NomeFileSicuro(titolo) + ".md";
-        var percorso = Path.Combine(Radice, cartella, nome);
+        var baseNome = DateTime.Now.ToString("yyyy-MM-dd-HHmmss") + "-" + Testo.NomeFileSicuro(titolo);
+        var percorso = Path.Combine(Radice, cartella, baseNome + ".md");
+        // Due note con lo stesso titolo nello stesso secondo: la seconda prende un numero, non sovrascrive.
+        for (var n = 2; File.Exists(percorso); n++)
+            percorso = Path.Combine(Radice, cartella, baseNome + " (" + n + ").md");
         if (!Percorsi.StaDentro(Radice, percorso))
             throw new InvalidOperationException("La nota uscirebbe dal mondo.");
         var corpo = $"# {titolo.Replace("#", "")}\n\n{testo}\n\n_Liquidino, {DateTime.Now:yyyy-MM-dd HH:mm}_\n";
@@ -110,6 +114,7 @@ public sealed class Mondo
             }
         }
         foreach (var c in Cartelle) Aggiungi(c);
+        Aggiungi("diario");
         Aggiungi("cestino");
         Aggiungi("memoria");
         var reg = Path.Combine(Radice, "registro");
@@ -122,6 +127,42 @@ public sealed class Mondo
             }
         }
         return voci.OrderByDescending(v => v.Quando).ToList();
+    }
+
+    static readonly string[] EstensioniTesto = [".md", ".txt", ".json", ".jsonl", ".log"];
+
+    public static bool ETesto(string percorso) =>
+        EstensioniTesto.Contains(Path.GetExtension(percorso).ToLowerInvariant());
+
+    /// <summary>«2026-11-04-153012-Pane e latte.md» diventa «Pane e latte». Gli altri nomi restano come sono.</summary>
+    public static string TitoloDi(string nomeFile)
+    {
+        var m = NomiMondo.NotaConData().Match(nomeFile ?? "");
+        return m.Success ? m.Groups[1].Value : nomeFile ?? "";
+    }
+
+    /// <summary>
+    /// L'inizio del file, per il pannello. Solo dentro il mondo e solo i file di testo;
+    /// per gli altri dice il tipo e il peso. Null se il file non c'è o sta fuori.
+    /// </summary>
+    public string? Anteprima(string percorso, int massimo = 700)
+    {
+        if (string.IsNullOrWhiteSpace(percorso) || !Percorsi.StaDentro(Radice, percorso) || !File.Exists(percorso)) return null;
+        var info = new FileInfo(percorso);
+        if (!ETesto(percorso))
+            return "File " + info.Extension.TrimStart('.').ToUpperInvariant() + ", " + Math.Max(1, info.Length / 1024) + " KB.";
+        try
+        {
+            using var lettore = new StreamReader(percorso);
+            var buffer = new char[Math.Max(1, massimo) + 1];
+            var letti = lettore.ReadBlock(buffer, 0, buffer.Length);
+            var testo = new string(buffer, 0, letti).Replace("\r\n", "\n").TrimEnd();
+            return letti > massimo ? testo[..massimo].TrimEnd() + "…" : testo;
+        }
+        catch (Exception e)
+        {
+            return "Non riesco a leggerlo: " + e.Message;
+        }
     }
 
     public string? NelCestino(string percorso)
