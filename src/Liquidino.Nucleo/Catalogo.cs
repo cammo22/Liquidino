@@ -275,7 +275,7 @@ public static class DecisoreLocale
         if (Contiene(t, "ricordati", "ricorda che", "ricorda:")) return Fatta("ricorda", 0.8);
         if (Contiene(t, "che ore", "che ora", "leggi l'ora", "leggi l'orologio", "che giorno")) return Fatta("che_ore_sono", 0.9);
         if (Contiene(t, "prendi nota", "segnati", "una nota", "appunta", "scrivi una nota")) return Fatta("crea_nota", 0.75);
-        if (Contiene(t, "creazioni", "cosa hai creato", "fammi vedere", "il tuo mondo", "le tue note")) return Fatta("mostra_creazioni", 0.8);
+        if (Contiene(t, "creazioni", "cosa hai creato", "fammi vedere", "il tuo mondo", "le tue note", "la tua cartella", "il tuo diario")) return Fatta("mostra_creazioni", 0.8);
         if (Contiene(t, "vai a dormire", "mettiti a dormire", "puoi dormire")) return Fatta("dormi", 0.85);
         return Fatta("rispondi", 0.7);
     }

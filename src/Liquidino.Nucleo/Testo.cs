@@ -86,16 +86,6 @@ public static class Testo
         return lista;
     }
 
-    /// <summary>Chiede di usare mouse, tastiera o altri programmi: nel prototipo non si fa.</summary>
-    public static bool ChiedeIlPc(string testo)
-    {
-        var s = (testo ?? "").ToLowerInvariant();
-        string[] chiavi =
-        [
-            "clicca", "muovi il mouse", "sposta il mouse", "apri il programma", "usa il pc",
-            "usa il computer", "premi il tasto", "scrivi al posto mio", "controlla il desktop",
-            "apri esplora", "lancia "
-        ];
-        return chiavi.Any(s.Contains);
-    }
+    /// <summary>Chiede qualcosa sul PC (un gesto delle mani, fattibile o no). Le regole stanno in InterpretePc.</summary>
+    public static bool ChiedeIlPc(string testo) => InterpretePc.Riguarda(testo);
 }

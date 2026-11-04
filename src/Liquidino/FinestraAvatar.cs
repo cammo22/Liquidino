@@ -63,7 +63,7 @@ public sealed class FinestraAvatar : Window
         AllowDrop = true;
 
         _parla = Stile.Icona("🎤", "Parla: un clic per ascoltare, un altro per mandare.");
-        _permesso = Stile.Icona("🖥️", "Permesso del PC: si segna, non clicca da solo.");
+        _permesso = Stile.Icona("🖥️", TestoPermesso(false));
         _stop = Stile.Icona("⏹", "STOP: ferma il turno e scarica i modelli.", pericolo: true);
         var chat = Stile.Icona("💬", "Apri la chat.", principale: true);
         var creazioni = Stile.Icona("✨", "Apri le creazioni.");
@@ -373,9 +373,13 @@ public sealed class FinestraAvatar : Window
         var acceso = _ponte.Impostazioni.PermessoPc;
         _permesso.BorderBrush = acceso ? Stile.RossoP : Stile.Pennello("#3a3648");
         _permesso.Foreground = acceso ? Stile.RossoP : Stile.Inchiostro;
-        _permesso.ToolTip = acceso ? "Permesso del PC acceso. Per ora non clicca da solo." : "Permesso del PC: si segna, non clicca da solo.";
+        _permesso.ToolTip = TestoPermesso(acceso);
         AggiornaServizi();
     }
+
+    static string TestoPermesso(bool acceso) => acceso
+        ? "Permesso del PC acceso: apro un programma dopo il tuo sì, apro le cartelle, cambio il volume e guardo lo schermo. Non clicco e non scrivo. Un clic per spegnerlo."
+        : "Permesso del PC spento: non tocco niente fuori dal mio mondo. Un clic per accenderlo.";
 
     void AggiornaServizi()
     {
@@ -473,7 +477,7 @@ public sealed class FinestraAvatar : Window
                 "voce" => "Voce di Omni.",
                 "mani" => "Mani, LFM3-1.7B, per scrivere e compilare.",
                 "occhi" => "VL, per guardare le immagini.",
-                _ => "Permesso del PC."
+                _ => "Permesso del PC acceso: le mani possono lavorare."
             }
         };
     }

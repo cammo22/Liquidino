@@ -16,6 +16,7 @@ public sealed class Ponte
     public Dialogo Dialogo { get; }
     public CicloAutonomo Ciclo { get; }
     public Microfono Microfono { get; } = new();
+    public ManiWindows Mani { get; } = new();
     public LettoreVoce Lettore { get; } = new();
     public StatoCompagno Stato { get; private set; } = StatoCompagno.Dorme;
     public string? EtichettaAggiornamento { get; private set; }
@@ -44,7 +45,7 @@ public sealed class Ponte
         Mondo = new Mondo();
         Registro = new Registro();
         Regista = new Regista(impostazioni, Registro);
-        Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()));
+        Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()), Mani);
         Ciclo = new CicloAutonomo(impostazioni, Mondo, Registro, Regista);
         Lettore.Finito += () =>
         {
@@ -62,6 +63,7 @@ public sealed class Ponte
 
     public void AvviaOrologi()
     {
+        _ = Task.Run(Mani.Prepara);
         _ciclo = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti) };
         _ciclo.Tick += async (_, _) =>
         {
