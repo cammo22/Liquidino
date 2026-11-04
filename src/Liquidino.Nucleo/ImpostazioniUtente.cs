@@ -118,4 +118,7 @@ public static class JsonIo
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    /// <summary>Una riga sola, per il registro JSONL.</summary>
+    public static readonly JsonSerializerOptions Riga = new(Opzioni) { WriteIndented = false };
 }

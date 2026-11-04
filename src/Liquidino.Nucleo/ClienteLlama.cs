@@ -27,7 +27,13 @@ public sealed class ClienteLlama : IDisposable
 
     public ClienteLlama(int porta)
     {
-        _http = new HttpClient
+        // Solo questo PC: niente proxy di sistema, altrimenti 127.0.0.1 resta in attesa del proxy.
+        var prese = new SocketsHttpHandler
+        {
+            UseProxy = false,
+            ConnectTimeout = TimeSpan.FromSeconds(2)
+        };
+        _http = new HttpClient(prese)
         {
             BaseAddress = new Uri($"http://127.0.0.1:{porta}/"),
             Timeout = Timeout.InfiniteTimeSpan
@@ -51,21 +57,37 @@ public sealed class ClienteLlama : IDisposable
         catch { return false; }
     }
 
+    public string? UltimoErrore { get; private set; }
+
+    /// <summary>Chiede al router di caricare il modello e aspetta che lo stato sia «loaded».</summary>
     public async Task<bool> Carica(string id, CancellationToken ct)
     {
+        UltimoErrore = null;
         using var limite = Limite(ct, TempoCarico);
         var risp = await Posta("models/load", new { model = id }, limite.Token).ConfigureAwait(false);
-        if (!risp.ok && risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!risp.ok)
+        {
+            if (risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
+            UltimoErrore = "il router ha rifiutato il caricamento di " + id + ": " + Taglia(risp.corpo);
+            return false;
+        }
         var fine = DateTime.UtcNow + TempoCarico;
         while (DateTime.UtcNow < fine)
         {
             limite.Token.ThrowIfCancellationRequested();
             var stato = await StatoModello(id, limite.Token).ConfigureAwait(false);
             if (stato is "loaded") return true;
-            if (stato is "failed" or "error") return false;
+            if (stato is "failed" or "error")
+            {
+                UltimoErrore = "il modello " + id + " è andato in errore durante il caricamento.";
+                return false;
+            }
             await Task.Delay(400, limite.Token).ConfigureAwait(false);
         }
-        return await StatoModello(id, limite.Token).ConfigureAwait(false) is "loaded";
+        var finale = await StatoModello(id, ct).ConfigureAwait(false);
+        if (finale is "loaded") return true;
+        UltimoErrore = "tempo scaduto: " + id + " non è pronto (stato: " + (finale ?? "sconosciuto") + ").";
+        return false;
     }
 
     public async Task Scarica(string id, CancellationToken ct)
@@ -101,7 +123,13 @@ public sealed class ClienteLlama : IDisposable
                 if (!string.Equals(mid, id, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!m.TryGetProperty("status", out var st)) return "unloaded";
                 if (st.ValueKind == JsonValueKind.String) return st.GetString();
-                if (st.ValueKind == JsonValueKind.Object && st.TryGetProperty("value", out var v)) return v.GetString();
+                if (st.ValueKind == JsonValueKind.Object)
+                {
+                    // Il router, se il processo figlio muore, lascia value=unloaded e failed=true.
+                    if (st.TryGetProperty("failed", out var fallito) && fallito.ValueKind == JsonValueKind.True)
+                        return "failed";
+                    if (st.TryGetProperty("value", out var v)) return v.GetString();
+                }
             }
             return "unloaded";
         }
@@ -110,8 +138,10 @@ public sealed class ClienteLlama : IDisposable
 
     public async Task<string> Decidi(string idModello, string stato, CatalogoAzioni catalogo, CancellationToken ct)
     {
+        var freschi = CatalogoAzioni.Predefinito();
         var criteria = new Dictionary<string, string>();
-        foreach (var a in catalogo.Azioni) criteria[a.Nome] = a.Descrizione;
+        foreach (var a in catalogo.Azioni)
+            criteria[a.Nome] = CatalogoAzioni.Criterio(freschi.Trova(a.Nome) ?? a);
         var corpo = new
         {
             model = idModello,
@@ -121,7 +151,7 @@ public sealed class ClienteLlama : IDisposable
                 azione = new
                 {
                     type = "choice",
-                    instructions = "Quale azione deve fare Liquidino? Scegline una sola fra queste.",
+                    instructions = CatalogoAzioni.IstruzioniD1,
                     criteria
                 }
             }

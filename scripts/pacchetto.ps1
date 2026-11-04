@@ -38,5 +38,8 @@ try {
   if (-not $setup) { throw "Manca il Setup di Velopack" }
   Copy-Item $setup.FullName (Join-Path $uscite "Liquidino-Setup.exe") -Force
   Get-ChildItem $uscite -Filter "*Portable.zip" -ErrorAction SilentlyContinue | Remove-Item -Force
+  $portatile = Join-Path $uscite "Liquidino-portatile.zip"
+  if (Test-Path $portatile) { Remove-Item $portatile -Force }
+  Compress-Archive -Path (Join-Path $radice "pubblicato\*") -DestinationPath $portatile
   Get-ChildItem $uscite | Format-Table Name, @{ n = "MB"; e = { [math]::Round($_.Length / 1MB, 1) } } -AutoSize
 } finally { Pop-Location }

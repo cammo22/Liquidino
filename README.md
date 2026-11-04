@@ -15,14 +15,14 @@ Se manca un modello, Liquidino lo dice. Non lo scarica. L'unica cosa che guarda 
 ## Cosa fa questa prova
 
 - Avatar trasparente, sempre davanti, lo sposti col mouse. Stati: **dorme**, **ascolta**, **pensa**, **parla**. La rotella lo ingrandisce. Ogni tanto cambia oggetto, fra quelli già approvati del Convertitore.
-- Un clic apre chat e mondo. Il mondo è la cartella `%LOCALAPPDATA%\Liquidino\mondo`: note, idee, memoria, cestino, registro. Si apre anche da «Apri cartella».
-- d1 sceglie fra sei azioni: rispondi, crea nota, ricorda, dimentica, mostra le creazioni, dormi. Sotto sicurezza 0,6 chiede «sì» o «no».
+- Un clic apre chat e mondo. Il mondo è la cartella `%LOCALAPPDATA%\Liquidino-dati\mondo`: note, idee, memoria, cestino, registro. Non sta nella cartella del programma, così un aggiornamento non la cancella. Si apre anche da «Apri cartella».
+- d1 sceglie l'azione. Per chiacchierare risponde subito. Chiede conferma, con i pulsanti sul fumetto, solo se deve scrivere, ricordare o dimenticare e non è sicuro.
 - La chat usa Omni, se c'è, altrimenti LFM3-1.7B. La voce è il testo letto da `/tts` in italiano. Il ragionamento degli strumenti è spento.
 - Il regista tiene accesi al massimo due modelli e li scarica quando non servono. Di notte (dalle 23 alle 7) dorme.
 - Ogni ora, se non lo spegni, lascia un pensiero in `mondo/idee`. Nelle prime due settimane è un saluto. «Un pensiero adesso» non ti fa aspettare l'ora.
 - Tasto **Permesso** accanto all'avatar: viene solo segnato. Le mani sul PC arrivano dopo. **STOP** scarica i modelli subito.
 - Memoria in `mondo/memoria/cosa-so-di-te.md`. Si cancella a mano o con «dimentica». Il registro non conserva il testo cancellato.
-- Prompt e catalogo, da leggere e modificare (poi riavvia): `%LOCALAPPDATA%\Liquidino\prompt\sistema.md` e `catalogo\azioni.json`.
+- Prompt e catalogo, da leggere e modificare (poi riavvia): `%LOCALAPPDATA%\Liquidino-dati\prompt\sistema.md` e `catalogo\azioni.json`. Quelli di serie restano dentro il programma.
 
 Trascina un'immagine sull'avatar: se c'è Omni (o VL) la guarda. Un altro tipo di file: te lo dice e non lo tocca.
 

@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Liquidino</RootNamespace>
@@ -13,6 +14,13 @@
     <Description>Compagno da desktop, offline, solo per uso personale.</Description>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
   </PropertyGroup>
+
+  <!-- WinForms serve solo all'icona nel vassoio. Se restasse importato ovunque,
+       Button, Image e gli altri nomi di WPF diventerebbero ambigui. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Liquidino.Nucleo\Liquidino.Nucleo.csproj" />
@@ -27,6 +35,7 @@
     <Resource Include="..\..\risorse\font\Rajdhani-Medium.ttf" Link="font\Rajdhani-Medium.ttf" />
     <Resource Include="..\..\risorse\font\Rajdhani-Bold.ttf" Link="font\Rajdhani-Bold.ttf" />
     <Resource Include="..\..\risorse\font\DSEG7Classic-Bold.ttf" Link="font\DSEG7Classic-Bold.ttf" />
+    <Content Include="..\..\risorse\icona.ico" Link="icona.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\avatar\*.*" Link="avatar\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\prompt\sistema.md" Link="prompt\sistema.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\catalogo\azioni.json" Link="catalogo\azioni.json" CopyToOutputDirectory="PreserveNewest" />

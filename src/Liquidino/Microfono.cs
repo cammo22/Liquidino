@@ -1,3 +1,4 @@
+using Liquidino.Nucleo;
 using NAudio.Wave;
 
 namespace Liquidino;
@@ -5,11 +6,15 @@ namespace Liquidino;
 /// <summary>Registra dal microfono un WAV a 16 kHz, solo in memoria di lavoro. Non si tiene l'audio.</summary>
 public sealed class Microfono : IDisposable
 {
+    readonly FinestraSilenzio _silenzio = new();
     WaveInEvent? _onda;
     WaveFileWriter? _file;
     string? _percorso;
 
     public bool StaRegistrando { get; private set; }
+
+    /// <summary>Butta i campioni fino a quest'istante: la voce di Liquidino non diventa un turno.</summary>
+    public void SilenziaFino(DateTime utc) => _silenzio.FinoA(utc);
 
     public void Inizia()
     {
@@ -23,6 +28,7 @@ public sealed class Microfono : IDisposable
         _file = new WaveFileWriter(_percorso, _onda.WaveFormat);
         _onda.DataAvailable += (_, a) =>
         {
+            if (_silenzio.Scarta(DateTime.UtcNow)) return;
             try { _file?.Write(a.Buffer, 0, a.BytesRecorded); }
             catch { /* la registrazione sta per chiudersi */ }
         };

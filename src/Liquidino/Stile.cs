@@ -82,6 +82,19 @@ public static class Stile
         return b;
     }
 
+    /// <summary>Simbolo al posto della parola. Il tooltip dice che cosa fa.</summary>
+    public static Button Icona(string simbolo, string tooltip, bool principale = false, bool pericolo = false)
+    {
+        var b = Bottone(simbolo, principale, pericolo);
+        b.FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Segoe UI");
+        b.FontSize = 18;
+        b.Padding = new Thickness(6, 2, 6, 2);
+        b.MinWidth = 42;
+        b.Margin = new Thickness(3, 2, 3, 2);
+        b.ToolTip = tooltip;
+        return b;
+    }
+
     public static TextBlock Titolo(string testo, bool chiaro = false) => new()
     {
         Text = testo,

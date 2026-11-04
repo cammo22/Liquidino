@@ -1,5 +1,30 @@
 # Novità
 
+## 0.2.1
+
+### Novità
+
+- Icona nell'area di notifica, in basso a destra. Tasto destro: mostra o nascondi l'avatar, aggiornamenti, esci.
+- Lo stesso menu sta anche sull'avatar, con in più Parla, Chat, Creazioni, Permesso, STOP, Dormi e Impostazioni.
+- Gli aggiornamenti, dal menu, dicono a che punto sono: controllo, sei aggiornato, scarico, riavvia.
+
+### Correzioni
+
+- Prima di rispondere, Liquidino carica davvero il modello e aspetta che sia pronto. Se non parte, lo scrive in chat e nel fumetto, e nel registro.
+- Un turno annullato dice perché (STOP o Esc).
+- Esci chiude anche llama-server. Se non risponde, dopo qualche secondo viene chiuso comunque.
+- Per chiacchierare non chiede più conferma. La chiede solo se deve scrivere, ricordare o dimenticare, e la domanda sta sul fumetto con Sì e No.
+- I dati (mondo, impostazioni, memoria) stanno in `%LOCALAPPDATA%\Liquidino-dati`, fuori dalla cartella che l'aggiornamento svuota. Se erano ancora nella cartella vecchia, li porta via al primo avvio.
+- Mentre parla non si ascolta. Il registro è una riga per voce. d1 e la voce restano accesi finché si chiacchiera.
+- Di notte non si addormenta se la chat è stata usata da poco.
+- Sull'avatar i tasti sono simboli, con la spiegazione al passaggio del mouse, e compaiono solo quando il cursore è lì. Le risposte si leggono nel fumetto.
+
+### Da provare
+
+- Scrivi «ciao» in chat. Nel registro di oggi devono comparire «ricevuto», «chiedo il caricamento» e «caricato».
+- Premi STOP. Deve comparire «scaricato» o «STOP premuto», e la finestra resta viva.
+- Tasto destro sull'icona in basso a destra: nascondi l'avatar, poi mostralo di nuovo. Esci chiude tutto.
+
 ## 0.2.0
 
 ### Novità

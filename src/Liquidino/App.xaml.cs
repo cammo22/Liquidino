@@ -8,11 +8,17 @@ public partial class App : System.Windows.Application
 {
     Mutex? _mutex;
     Ponte? _ponte;
+    FinestraAvatar? _avatar;
+    Vassoio? _vassoio;
+    public bool InUscita { get; private set; }
 
     public App()
     {
         // Prima di tutto: Velopack sistema l'avvio dopo un aggiornamento. Non va in rete da solo.
-        VelopackApp.Build().Run();
+        VelopackApp.Build()
+            .OnBeforeUpdateFastCallback(_ => MigrazioneDati.Esegui())
+            .OnBeforeUninstallFastCallback(_ => MigrazioneDati.Esegui())
+            .Run();
         InitializeComponent();
     }
 
@@ -42,6 +48,8 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        try { MigrazioneDati.Esegui(); }
+        catch { /* se la copia non riesce, i dati nuovi nascono vuoti e i vecchi restano dov'erano */ }
         Semi.Prepara();
         var imp = ImpostazioniUtente.Carica();
         if (!imp.PrimoAvvioCompletato)
@@ -66,10 +74,12 @@ public partial class App : System.Windows.Application
         }
 
         _ponte = new Ponte(imp);
-        var avatar = new FinestraAvatar(_ponte);
-        MainWindow = avatar;
-        avatar.Show();
+        _avatar = new FinestraAvatar(_ponte);
+        _vassoio = new Vassoio(_ponte, _avatar, Esci);
+        MainWindow = _avatar;
+        _avatar.Show();
         _ponte.AvviaOrologi();
+        _ponte.SegnaAvvio();
 
         Aggiornamenti.Avvia();
 
@@ -81,9 +91,20 @@ public partial class App : System.Windows.Application
         }
     }
 
+    public void Esci()
+    {
+        if (InUscita) return;
+        InUscita = true;
+        try { _vassoio?.Dispose(); } catch { /* l'icona può essere già tolta */ }
+        try { _ponte?.Spegni(); } catch { /* il motore viene comunque chiuso sotto */ }
+        Shutdown();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
-        try { _ponte?.Chiudi(); } catch { /* in chiusura non si insiste */ }
+        InUscita = true;
+        try { _vassoio?.Dispose(); } catch { /* l'icona può essere già tolta */ }
+        try { _ponte?.Spegni(); } catch { /* in chiusura non si insiste */ }
         try { Aggiornamenti.AllaChiusura(); } catch { /* l'aggiornamento, se c'è, ci riprova al prossimo avvio */ }
         try { _mutex?.ReleaseMutex(); } catch { /* il mutex può essere già lasciato */ }
         _mutex?.Dispose();

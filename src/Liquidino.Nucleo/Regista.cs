@@ -8,6 +8,8 @@ public interface IRegista
     bool Presente(RuoloModello ruolo);
     IReadOnlyCollection<RuoloModello> Accesi { get; }
     string Descrizione();
+    string Riassunto();
+    string? UltimoErrore { get; }
     Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct);
     Task ScaricaTutto(CancellationToken ct);
     Task Ferma();
@@ -46,11 +48,22 @@ public sealed class Regista : IRegista
     public bool Presente(RuoloModello ruolo) => _rilevazione.Modelli.Any(m => m.Ruolo == ruolo);
     public IReadOnlyCollection<RuoloModello> Accesi => _accesi.ToList();
 
+    public string? UltimoErrore { get; private set; }
+
     public string Descrizione()
     {
         if (!MotorePresente) return "motore non trovato";
         if (_accesi.Count == 0) return "motore fermo, modelli spenti";
         return "accesi: " + string.Join(", ", _accesi.Select(NomiModello.Etichetta));
+    }
+
+    public string Riassunto()
+    {
+        var nomi = _rilevazione.Modelli.Count == 0
+            ? "nessun GGUF"
+            : string.Join(", ", _rilevazione.Modelli.Select(m => m.Id));
+        var exe = _rilevazione.Eseguibile is null ? "llama-server non trovato" : Path.GetFileName(_rilevazione.Eseguibile);
+        return exe + " · cartella " + _imp.CartellaMotore + " · " + nomi;
     }
 
     public void Rileggi() => _rilevazione = RilevatoreModelli.Cerca(_imp.CartellaMotore);
@@ -65,16 +78,52 @@ public sealed class Regista : IRegista
     public void UccidiSubito()
     {
         AnnullaOperazioni();
-        try
-        {
-            if (_processo is { HasExited: false }) _processo.Kill(entireProcessTree: true);
-        }
-        catch { /* già chiuso */ }
+        UccidiProcesso(_processo);
+        UccidiLlamaSullaPorta(_imp.Porta);
         try { _cliente?.Dispose(); } catch { /* già chiuso */ }
         _cliente = null;
         _processo = null;
         _avviatoDaNoi = false;
         _accesi.Clear();
+    }
+
+    /// <summary>Chiude llama-server in ascolto sulla nostra porta, anche se non l'abbiamo avviato noi.</summary>
+    public static void UccidiLlamaSullaPorta(int porta)
+    {
+        try
+        {
+            var si = new ProcessStartInfo("netstat", "-ano")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(si);
+            if (p is null) return;
+            var letto = p.StandardOutput.ReadToEndAsync();
+            if (!p.WaitForExit(3000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
+                return;
+            }
+            var testo = letto.Wait(1000) ? letto.Result : "";
+            var ago = ":" + porta;
+            foreach (var riga in testo.Split('\n'))
+            {
+                if (!riga.Contains(ago, StringComparison.Ordinal) || !riga.Contains("LISTENING", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var pezzi = riga.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (pezzi.Length == 0 || !int.TryParse(pezzi[^1], out var pid) || pid <= 0) continue;
+                try
+                {
+                    var proc = Process.GetProcessById(pid);
+                    if (!proc.ProcessName.Contains("llama", StringComparison.OrdinalIgnoreCase)) continue;
+                    proc.Kill(entireProcessTree: true);
+                }
+                catch { /* il processo è già uscito */ }
+            }
+        }
+        catch { /* netstat può mancare: il processo nostro è già stato chiuso sopra */ }
     }
 
     public async Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)
@@ -93,10 +142,11 @@ public sealed class Regista : IRegista
         if (!await Garantito(ct)) return false;
         var piano = PoliticaCarico.Calcola(_accesi, ruoli);
         foreach (var spegni in piano.Spegni)
-            await ScaricaUno(spegni, ct);
-        foreach (var accendi in piano.Accendi)
+            await ScaricaUno(spegni, ct).ConfigureAwait(false);
+        // Con --no-models-autoload il router non carica da solo: lo chiediamo noi, ogni volta.
+        foreach (var ruolo in ruoli.Distinct())
         {
-            if (!await AccendiUno(accendi, ct)) return false;
+            if (!await AccendiUno(ruolo, ct).ConfigureAwait(false)) return false;
         }
         if (_accesi.Count > PoliticaCarico.MassimoInsieme)
             throw new InvalidOperationException("Mai più di due modelli insieme.");
@@ -207,7 +257,11 @@ public sealed class Regista : IRegista
         _cliente?.Dispose();
         _cliente = null;
         _accesi.Clear();
-        if (_rilevazione.Eseguibile is null) return false;
+        if (_rilevazione.Eseguibile is null)
+        {
+            UltimoErrore = "non trovo llama-server in " + _imp.CartellaMotore;
+            return false;
+        }
         var preset = Percorsi.Preset(_radiceDati);
         await Task.Run(() => PresetMotore.Scrivi(preset, Percorsi.Slot(_radiceDati), _rilevazione.Modelli, _imp), ct).ConfigureAwait(false);
         var exe = _rilevazione.Eseguibile;
@@ -265,11 +319,9 @@ public sealed class Regista : IRegista
             }
             await Task.Delay(300, ct).ConfigureAwait(false);
         }
-        _registro.SegnaErrore("llama-server non si è acceso. Guarda motore/server.log.");
-        if (_avviatoDaNoi && _processo is { HasExited: false })
-        {
-            try { _processo.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
-        }
+        UltimoErrore = "llama-server non si è acceso. Guarda motore/server.log.";
+        _registro.SegnaErrore(UltimoErrore);
+        if (_avviatoDaNoi) UccidiProcesso(_processo);
         _cliente?.Dispose();
         _cliente = null;
         _processo = null;
@@ -279,15 +331,23 @@ public sealed class Regista : IRegista
 
     async Task<bool> AccendiUno(RuoloModello ruolo, CancellationToken ct)
     {
-        if (_cliente is null) return false;
+        if (_cliente is null)
+        {
+            UltimoErrore = "llama-server non è in ascolto.";
+            return false;
+        }
+        if (_accesi.Contains(ruolo)) return true;
         var id = NomiModello.IdDi(ruolo);
         var slot = id + ".bin";
+        _registro.Scrivi("modello", "chiedo il caricamento di " + id, "ok", ruolo.ToString());
         var ok = await _cliente.Carica(id, ct).ConfigureAwait(false);
         if (!ok)
         {
-            _registro.SegnaErrore("non sono riuscito a caricare " + id);
+            UltimoErrore = _cliente.UltimoErrore ?? ("non sono riuscito a caricare " + id);
+            _registro.SegnaErrore(UltimoErrore);
             return false;
         }
+        UltimoErrore = null;
         _accesi.Add(ruolo);
         var fileSlot = Path.Combine(Percorsi.Slot(_radiceDati), slot);
         if (File.Exists(fileSlot))
@@ -311,15 +371,38 @@ public sealed class Regista : IRegista
         _registro.Scrivi("modello", "scaricato " + NomiModello.Etichetta(ruolo), "ok", ruolo.ToString());
     }
 
+    /// <summary>Chiude il processo. Il kill dell'albero, se resta fermo, non blocca chi ha chiesto di uscire.</summary>
+    static void UccidiProcesso(Process? processo)
+    {
+        if (processo is null) return;
+        try
+        {
+            if (processo.HasExited) return;
+            var fatto = Task.Run(() =>
+            {
+                try { processo.Kill(entireProcessTree: true); }
+                catch
+                {
+                    try { processo.Kill(); } catch { /* già chiuso */ }
+                }
+            });
+            if (!fatto.Wait(4000))
+            {
+                try { processo.Kill(); } catch { /* già chiuso */ }
+            }
+        }
+        catch { /* già chiuso */ }
+    }
+
     static readonly object LucchettoLog = new();
 
     static async Task Pompa(StreamReader letto, string log)
     {
         try
         {
-            while (!letto.EndOfStream)
+            while (true)
             {
-                var riga = await letto.ReadLineAsync();
+                var riga = await letto.ReadLineAsync().ConfigureAwait(false);
                 if (riga is null) break;
                 lock (LucchettoLog) File.AppendAllText(log, riga + Environment.NewLine);
             }
