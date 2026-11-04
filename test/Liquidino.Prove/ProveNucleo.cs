@@ -473,55 +473,7 @@ public class ProveNucleo
         Assert.False(finestra.Scarta(ora.AddMilliseconds(700)));
     }
 
-    static string Temporanea()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "liquidino-prove-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        return dir;
-    }
+    static string Temporanea() => Aiuti.Temporanea();
 
-    static ImpostazioniUtente Impostazioni(string radice)
-    {
-        var imp = new ImpostazioniUtente { PercorsoFile = Path.Combine(radice, "impostazioni.json") };
-        return imp;
-    }
-
-    sealed class RegistaFinto : IRegista
-    {
-        public bool MotorePresente { get; set; }
-        public HashSet<RuoloModello> Presenti { get; } = [];
-        public List<RuoloModello> AccesiLista { get; } = [];
-        public IReadOnlyCollection<RuoloModello> Accesi => AccesiLista;
-        public Func<string, SceltaAzione?>? SuDecidi { get; set; }
-
-        public bool Presente(RuoloModello ruolo) => Presenti.Contains(ruolo);
-        public string? UltimoErrore => null;
-        public string Riassunto() => Descrizione();
-        public string Descrizione() => "finto";
-
-        public Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)
-        {
-            if (ruoli.Distinct().Count() > 2) throw new InvalidOperationException("Mai più di due modelli insieme.");
-            AccesiLista.Clear();
-            AccesiLista.AddRange(ruoli);
-            return Task.FromResult(MotorePresente && ruoli.All(Presente));
-        }
-
-        public Task ScaricaTutto(CancellationToken ct)
-        {
-            AccesiLista.Clear();
-            return Task.CompletedTask;
-        }
-
-        public Task Ferma() => ScaricaTutto(CancellationToken.None);
-
-        public Task<SceltaAzione?> Decidi(string stato, CatalogoAzioni catalogo, CancellationToken ct) =>
-            Task.FromResult(SuDecidi?.Invoke(stato));
-
-        public Task<RispostaChat?> Completa(RichiestaChat richiesta, CancellationToken ct) =>
-            Task.FromResult<RispostaChat?>(new RispostaChat("{}", null));
-
-        public Task<string?> Trascrivi(byte[] wav, CancellationToken ct) => Task.FromResult<string?>("ciao");
-        public Task<byte[]?> Sintetizza(string testo, string voce, CancellationToken ct) => Task.FromResult<byte[]?>(null);
-    }
+    static ImpostazioniUtente Impostazioni(string radice) => Aiuti.Impostazioni(radice);
 }

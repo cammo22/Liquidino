@@ -177,13 +177,14 @@ public static class Estrattore
     {
         var t = (messaggio ?? "").Trim();
         string[] inizi = dimentica
-            ? ["dimentica quello che", "dimentica ciò che", "dimentica che", "dimentica:"]
-            : ["ricordati che", "ricorda che", "ricordati:", "ricorda:"];
+            ? ["dimentica quello che", "dimentica ciò che", "dimentica che", "dimentica:", "dimenticati di", "dimenticati", "dimentica"]
+            : ["ricordati che", "ricorda che", "ricordati:", "ricorda:", "ricordati", "ricorda"];
         foreach (var k in inizi)
         {
-            if (t.StartsWith(k, StringComparison.OrdinalIgnoreCase))
+            // Solo a fine parola: «ricorda» non deve mangiare l'inizio di «ricordami».
+            if (t.StartsWith(k, StringComparison.OrdinalIgnoreCase) && (t.Length == k.Length || !char.IsLetter(t[k.Length])))
             {
-                t = t[k.Length..].Trim().TrimStart(':', '-', ' ');
+                t = t[k.Length..].Trim().TrimStart(':', '-', ' ', ',');
                 break;
             }
         }

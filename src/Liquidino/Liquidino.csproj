@@ -13,6 +13,8 @@
     <ApplicationIcon>..\..\risorse\icona.ico</ApplicationIcon>
     <Description>Compagno da desktop, offline, solo per uso personale.</Description>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+    <!-- WFAC010 vale per le app WinForms: qui WinForms serve solo al vassoio, i DPI li decide il manifest di WPF. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
   <!-- WinForms serve solo all'icona nel vassoio. Se restasse importato ovunque,

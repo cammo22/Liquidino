@@ -15,6 +15,8 @@ public sealed class FinestraImpostazioni : Window
     readonly CheckBox _ciclo;
     readonly ComboBox _carattere;
     readonly ComboBox _voce;
+    readonly WrapPanel _strumenti;
+    readonly TextBlock _esito;
 
     public FinestraImpostazioni(Ponte ponte)
     {
@@ -94,6 +96,16 @@ public sealed class FinestraImpostazioni : Window
         pila.Children.Add(misura);
         pila.Children.Add(Stile.Riga("Contesto attuale: mani " + imp.ContestoMani + ", Omni " + imp.ContestoOmni + ", d1 " + imp.ContestoD1 + ".", secondario: true));
 
+        pila.Children.Add(Etichetta("Strumenti"));
+        _strumenti = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var dettagli = Stile.Bottone("Copia dettagli errore");
+        dettagli.Margin = new Thickness(0, 4, 8, 4);
+        dettagli.Click += (_, _) => CopiaDettagli();
+        _strumenti.Children.Add(dettagli);
+        pila.Children.Add(_strumenti);
+        _esito = Stile.Riga("", secondario: true);
+        pila.Children.Add(_esito);
+
         var tasti = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 18, 0, 0) };
         var salva = Stile.Bottone("Salva", principale: true);
         salva.Click += async (_, _) =>
@@ -130,6 +142,21 @@ public sealed class FinestraImpostazioni : Window
         Foreground = Stile.CianoP,
         Margin = new Thickness(0, 10, 0, 4)
     };
+
+    void CopiaDettagli()
+    {
+        var sistema = Environment.OSVersion.VersionString + (Environment.Is64BitOperatingSystem ? ", 64 bit" : "");
+        var testo = DettagliErrore.Componi(Ponte.Versione, sistema, _ponte.Regista.Riassunto(), _ponte.Registro);
+        try
+        {
+            System.Windows.Clipboard.SetText(testo);
+            _esito.Text = "Dettagli copiati. Prima di incollarli guarda che non ci sia niente di tuo: la chat e la memoria non ci sono.";
+        }
+        catch (Exception e)
+        {
+            _esito.Text = "Questo fallo tu: gli appunti sono occupati da un altro programma. Riprova fra un attimo. (" + e.Message + ")";
+        }
+    }
 
     void Sfoglia()
     {

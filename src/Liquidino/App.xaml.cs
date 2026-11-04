@@ -52,6 +52,9 @@ public partial class App : System.Windows.Application
         catch { /* se la copia non riesce, i dati nuovi nascono vuoti e i vecchi restano dov'erano */ }
         Semi.Prepara();
         var imp = ImpostazioniUtente.Carica();
+        if (imp.CopiaRovinata is { } rovinata)
+            MessageBox.Show("Le impostazioni non si leggevano più. Le ho messe da parte in\n" + rovinata +
+                "\ne riparto dalle scelte di serie. Le note e la memoria non sono state toccate.", "Liquidino");
         if (!imp.PrimoAvvioCompletato)
         {
             var setup = new FinestraSetup(imp);
