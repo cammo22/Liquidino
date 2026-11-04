@@ -34,6 +34,10 @@ La parola «Ehi Liquidino» non è addestrata. L'elenco è in [ROADMAP.md](ROADM
 
 Dalle immagini già approvate del [DaP Convertitore](https://github.com/cammo22/DaP-Convertitore). Non sono state rifatte. Dettaglio in `PROVENIENZA.md`.
 
+## Documentazione
+
+Guida, architettura, sicurezza e convenzioni sono in [docs/](docs/README.md). Chi lavora sul codice parte da [AGENTS.md](AGENTS.md).
+
 ## Licenza
 
 Codice MIT (vedi [LICENSE](LICENSE)). Pesi dei modelli: LFM Open License v1.0, non sono nello zip, uso personale.
