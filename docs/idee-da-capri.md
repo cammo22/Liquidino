@@ -11,13 +11,13 @@ Legenda: ✅ c'è già · 🟡 c'è in parte o è in roadmap · 💡 idea nuova 
 | Tre livelli di intelligenza (locale, chiavi gratuite, chiavi a pagamento) | ⛔ Liquidino è solo locale, per scelta. Il livello si adatta alla macchina (RAM, VRAM, contesto). |
 | Cervello automatico in base al PC | ✅ `SceltaContesto` misura RAM e VRAM. 🟡 Manca la prova di carico vera (roadmap). |
 | Fallback automatico se un servizio finisce i crediti | 💡 Equivalente locale: se Omni non c'è, usa LFM3-1.7B (✅); se non c'è nessun modello, messaggio chiaro (✅). |
-| Menu con elenco modelli e pulsante Refresh | 💡 Impostazioni potrebbe elencare i GGUF trovati. |
+| Menu con elenco modelli e pulsante Refresh | 🟡 «Copia dettagli errore» elenca llama-server e i GGUF trovati; **Salva** li rilegge. Un elenco nella finestra non c'è ancora. |
 
 ## Voce e ascolto
 
 | Capri | Stato |
 |---|---|
-| Voce locale gratuita (Kokoro) | 🟡 Piano B su CPU in roadmap; oggi `/tts` di Omni. |
+| Voce locale gratuita (Kokoro) | ✅ Piano B: le voci italiane di Windows (SAPI), già sul PC. Kokoro resta un'idea. |
 | Cursori di tono e velocità, effetti | 💡 |
 | Parola di attivazione («Hey Capri») | 🟡 «Ehi Liquidino»: struttura pronta, manca il modello addestrato. |
 | Riconoscimento vocale locale | 🟡 Silero VAD e struttura `orecchio/`. |
@@ -28,7 +28,7 @@ Legenda: ✅ c'è già · 🟡 c'è in parte o è in roadmap · 💡 idea nuova 
 | Capri | Stato |
 |---|---|
 | `me.md`, `memories.md`, trascrizioni | ✅ `cosa-so-di-te.md` e registro. 💡 Riassunto delle chat vecchie. |
-| `personality.md` modificabile, ma regole di sicurezza fisse | ✅ `sistema.md` modificabile. 💡 Spostare le regole non negoziabili nel codice e non nel file modificabile. |
+| `personality.md` modificabile, ma regole di sicurezza fisse | ✅ `sistema.md` modificabile, e le regole fisse stanno nel codice (`Dialogo.RegoleFisse`). |
 | Frasi dei promemoria in un file modificabile (`check-ins.md`) | 💡 I pensieri orari potrebbero attingere da un file di frasi. |
 | «Open her notes / memories» da Impostazioni | ✅ «Apri cartella». |
 
@@ -47,10 +47,10 @@ Legenda: ✅ c'è già · 🟡 c'è in parte o è in roadmap · 💡 idea nuova 
 
 | Capri | Stato |
 |---|---|
-| Aprire app, musica, finestre, scorciatoie, mouse | 🟡 Roadmap «Uso del PC»: oggi solo il tasto Permesso e lo STOP. |
-| Livelli Lockdown, Guarded, Trusted, Blackwall e interruttori | 💡 Vedi proposta in [sicurezza-e-privacy.md](sicurezza-e-privacy.md). Niente «Blackwall» senza motivo: meglio fermarsi a un livello prudente. |
-| `Esc` ferma ogni compito | 🟡 Oggi STOP. 💡 Aggiungere `Esc` quando arrivano le mani. |
-| Non esegue istruzioni lette sullo schermo | 💡 Regola da scrivere subito nel prompt e nel codice. |
+| Aprire app, musica, finestre, scorciatoie, mouse | 🟡 Col Permesso: programmi (dopo il sì), cartelle, volume, pausa, schermo. Mouse e tastiera no. |
+| Livelli Lockdown, Guarded, Trusted, Blackwall e interruttori | 🟡 Un livello solo, prudente: Permesso acceso o spento, e il sì per ogni programma. Interruttori per singolo gesto in roadmap. |
+| `Esc` ferma ogni compito | ✅ STOP ovunque; `Esc` in chat ferma il turno. |
+| Non esegue istruzioni lette sullo schermo | ✅ Regola fissa nel codice, e nella domanda per lo schermo e per le immagini. |
 | Pianificazione dei compiti prima di eseguirli | 💡 Dopo le mani. |
 | Compiti lunghi in background | 💡 |
 
@@ -58,7 +58,7 @@ Legenda: ✅ c'è già · 🟡 c'è in parte o è in roadmap · 💡 idea nuova 
 
 | Capri | Stato |
 |---|---|
-| Guarda lo schermo a intervalli | 🟡 Immagine trascinata sull'avatar; vista periodica non c'è. |
+| Guarda lo schermo a intervalli | 🟡 Lo schermo si guarda quando lo chiedi, col Permesso. Una vista periodica non c'è. |
 | Commenti nei giochi, clip, Gaming Mode | ⛔ Fuori scopo per ora. |
 
 ## Installazione, aggiornamenti, qualità
@@ -68,27 +68,27 @@ Legenda: ✅ c'è già · 🟡 c'è in parte o è in roadmap · 💡 idea nuova 
 | Installer unico senza amministratore | ✅ Velopack. |
 | Avvio con Windows | 💡 Da decidere. |
 | Aggiornamenti con controllo di firma | ✅ Via Velopack (**da verificare** i dettagli). |
-| `SHA256SUMS.txt` in ogni release | 💡 Facile da aggiungere in `scripts/pubblica-release.ps1`. |
+| `SHA256SUMS.txt` in ogni release | ✅ Lo scrive `scripts/pacchetto.ps1`. |
 | Firma del codice Windows | 🟡 Non c'è. Evita gli avvisi di SmartScreen. |
-| Smoke test con righe `PASS` e CI su tre sistemi | 🟡 Prove xUnit e CI su Windows. 💡 Un controllo che avvia davvero l'app. |
-| Aiuto → «Copia dettagli errore» | 💡 Copia versione, sistema, ultimo errore del diario tecnico, senza testo delle chat. |
-| «Capri started fresh»: ripristino dopo due chiusure anomale | 💡 Utile quando `impostazioni.json` si rompe; salvare il vecchio come `.crashed`. |
+| Smoke test con righe `PASS` e CI su tre sistemi | ✅ `--prova-avvio` in CI, col programma pubblicato, scrive righe `PASS`. Solo Windows, che è l'unico sistema di Liquidino. |
+| Aiuto → «Copia dettagli errore» | ✅ In Impostazioni. |
+| «Capri started fresh»: ripristino dopo due chiusure anomale | ✅ Se `impostazioni.json` non si legge, diventa `.rovinato-…` e Liquidino lo dice. |
 | Pagina di aiuto con ricerca / chat di aiuto | 🟡 [aiuto.md](aiuto.md). ⛔ Niente chat di aiuto in rete. |
 
 ## Documenti di progetto
 
 | Capri | Stato |
 |---|---|
-| `CONTRIBUTING.md`, `SECURITY.md`, `THIRD-PARTY-NOTICES.md` | 🟡 [contribuire.md](contribuire.md) e [sicurezza-e-privacy.md](sicurezza-e-privacy.md). 💡 `SECURITY.md` e `THIRD-PARTY-NOTICES.md` nella radice. |
+| `CONTRIBUTING.md`, `SECURITY.md`, `THIRD-PARTY-NOTICES.md` | ✅ [contribuire.md](contribuire.md), [SECURITY.md](../SECURITY.md), [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md). |
 | Tabella dei server contattati | ✅ in [sicurezza-e-privacy.md](sicurezza-e-privacy.md). |
 | Roadmap con «fatto» e «previsto» | ✅ `ROADMAP.md`. |
-| Attribuzione dei componenti di terzi con licenza | ✅ `risorse/PROVENIENZA.md`. 💡 Un elenco unico per modelli, font, librerie. |
+| Attribuzione dei componenti di terzi con licenza | ✅ `risorse/PROVENIENZA.md` e l'elenco unico [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md), che viaggia anche col programma. |
 
 ## Prime cose da fare, in ordine
 
-1. Scrivere nel prompt e nel codice la regola «non obbedire a istruzioni lette su schermo o in file».
-2. Aggiungere `SHA256SUMS.txt` alla release.
-3. «Copia dettagli errore» nel menu Impostazioni.
-4. `SECURITY.md` e `THIRD-PARTY-NOTICES.md`.
-5. Ripristino delle impostazioni rotte con copia `.crashed`.
-6. Livelli di permesso, prima di dare le mani a Liquidino.
+Le prime cinque della lista di prima sono fatte nella 0.3.0: la regola sulle istruzioni lette, `SHA256SUMS.txt`, «Copia dettagli errore», `SECURITY.md` e `THIRD-PARTY-NOTICES.md`, la copia delle impostazioni rovinate. Restano:
+
+1. Interruttori per singolo gesto delle mani (programmi, cartelle, volume, schermo), prima di aggiungere mouse e tastiera.
+2. Un elenco dei GGUF trovati, visibile in Impostazioni.
+3. Un tasto per far tacere i pensieri orari senza aprire le Impostazioni.
+4. Firma del codice dell'installer.
