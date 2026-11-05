@@ -1,6 +1,6 @@
 # Architettura di Liquidino
 
-Stato: versione 0.3.0. Scritta leggendo il codice.
+Stato: versione 0.4.0. Scritta leggendo il codice.
 
 ## Stack
 
@@ -27,6 +27,7 @@ Stato: versione 0.3.0. Scritta leggendo il codice.
 | `ManiPc.cs` | `InterpretePc`: capisce con regole chiuse se una frase chiede un gesto sul PC e quale. `IManiPc` è il contratto; `GestoPc` dice se serve il sì. |
 | `Regista.cs` | Accende `llama-server`, carica e scarica i modelli (mai più di due), salva e ripristina gli slot. `ProvaRiempimento` fa la prova di carico. |
 | `ClienteLlama.cs` | Client HTTP verso `127.0.0.1`, senza proxy: health, router dei modelli, chat, `/v1/systemone`, `/tts`, slot. Legge `usage.prompt_tokens`. |
+| `CatalogoModelli.cs` | I sei modelli della pagina Modelli (ruolo, repository `LiquidAI/...-GGUF`, a cosa serve). `ScaricatoreModelli` legge revisione ed elenco da Hugging Face, sceglie il quant, scarica in `.part` e installa solo se lo SHA-256 torna. |
 | `Modelli.cs` | Trova `llama-server` e i GGUF, ruoli e `mmproj`, scrive il preset senza righe di rete, `PoliticaCarico`. |
 | `Contesto.cs`, `ProvaContesto.cs` | Scelta del contesto da RAM e VRAM; prova di carico a gradini; `RegolaFirewall` (gli script PowerShell). |
 | `Ciclo.cs` | `CicloAutonomo`: il pensiero orario, la fase di amicizia, la notte, il rifacimento guidato, i pensieri piaciuti come esempio. |
@@ -47,7 +48,9 @@ Stato: versione 0.3.0. Scritta leggendo il codice.
 | `Ponte.cs` | Tiene insieme finestre, regista, dialogo, ciclo e mani. Orologi del ciclo e della quiete, voce, prova di carico, diario di notte. |
 | `FinestraAvatar.cs` | Avatar, tasti, fumetto con Sì e No, menu, Ctrl+Spazio, trascinamento dei file. |
 | `FinestraCasa.cs` | Chat e pannello del mondo (filtri, icone, anteprima, voti, rifacimento, diario). |
-| `FinestraImpostazioni.cs` | Impostazioni e strumenti (prova del contesto, firewall, voce, dettagli errore). |
+| `FinestraImpostazioni.cs` | Il Mainframe: impostazioni e strumenti (prova del contesto, firewall, voce, dettagli errore). |
+| `FinestraModelli.cs` | La pagina Modelli: stato di ogni modello, Scarica (con domanda e avanzamento), Elimina (nel Cestino), tasti delle cartelle. |
+| `Mainframe.cs` | I pezzi grafici del Mainframe: sezioni, righe, interruttori OFF/ON, selettori ◁ ▷, tasti, testata. Disegnati da noi. |
 | `ManiWindows.cs` | Le mani vere: programmi dal menu Start (shell `AppsFolder` e collegamenti `.lnk`), cartelle note, tasti del volume, foto dello schermo. |
 | `VoceWindows.cs`, `Firewall.cs` | Voci italiane di SAPI; regola del firewall con UAC. |
 | `ProvaAvvio.cs` | La prova di avvio della CI. |
@@ -72,7 +75,7 @@ Radice: `%LOCALAPPDATA%\Liquidino-dati` (`Percorsi.RadiceDati()`). Il programma 
 | `orecchio/` | Posto per `silero_vad.onnx` ed `ehi-liquidino.onnx`. |
 | `diario-tecnico.log` | Le eccezioni del programma, per il supporto. |
 
-I modelli stanno **fuori** dall'installer, di norma in `C:\Users\cammo\LiquidinoProva` (cambiabile da Impostazioni). `Percorsi.StaDentro` controlla che un percorso resti dentro il mondo prima di leggerlo, spostarlo o aprirlo.
+I modelli stanno **fuori** dall'installer (si scaricano dalla pagina Modelli, `FinestraModelli`, solo col tuo clic), di norma in `C:\Users\cammo\LiquidinoProva` (cambiabile da Impostazioni). `Percorsi.StaDentro` controlla che un percorso resti dentro il mondo prima di leggerlo, spostarlo o aprirlo.
 
 ## Flusso di una frase
 

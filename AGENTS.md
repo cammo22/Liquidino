@@ -22,7 +22,7 @@ L'app WPF (`net8.0-windows`) si avvia solo su Windows. Su Linux si compila con l
 ## Regole che non si rompono
 
 1. Nessuna nuova chiamata di rete né tracciamento senza chiederlo, e va scritta in `docs/sicurezza-e-privacy.md`.
-2. Nessun modello scaricato in automatico, nessun peso nel repository.
+2. Nessun modello scaricato senza un tuo clic e il tuo sì (pagina Modelli), nessun peso nel repository.
 3. Liquidino non dice di aver fatto ciò che non ha fatto («Questo fallo tu:» + motivo).
 4. Azioni che inviano, pubblicano, comprano, cancellano o installano chiedono conferma. Le mani sul PC fanno solo i gesti di `InterpretePc`, col Permesso acceso.
 5. La logica sta in `src/Liquidino.Nucleo` e ha una prova in `test/Liquidino.Prove`.

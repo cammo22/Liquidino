@@ -10,7 +10,7 @@ Compagno da desktop per Windows. Sta sul PC, parla italiano, non va in internet 
 4. Apri Liquidino dall'icona sul desktop o dal menu Start.
 5. Al primo avvio: il tuo nome, il carattere e la voce. I tasti sotto l'avatar sono un clic. I modelli restano in `C:\Users\cammo\LiquidinoProva` (Impostazioni, se la cartella è un'altra): non sono dentro l'installer.
 
-Se manca un modello, Liquidino lo dice. Non lo scarica. L'unica cosa che guarda in rete è se c'è un aggiornamento: lo scrive nella barra in alto della chat. Per controllare il Setup scaricato c'è `SHA256SUMS.txt` nella stessa release.
+Se manca un modello, Liquidino lo dice. Per scaricarlo c'è la pagina **Modelli** (Impostazioni → Modelli): a cosa serve ogni modello, quanto pesa, Scarica, Elimina e i tasti per aprire le cartelle. Scarica solo dopo il tuo sì, da Hugging Face, e controlla l'impronta del file. Da solo guarda in rete solo se c'è un aggiornamento: lo scrive nella barra in alto della chat. Per controllare il Setup scaricato c'è `SHA256SUMS.txt` nella stessa release.
 
 ## Cosa fa
 
@@ -24,7 +24,7 @@ Se manca un modello, Liquidino lo dice. Non lo scarica. L'unica cosa che guarda 
 - Ogni ora, se non lo spegni, lascia un pensiero in `mondo/idee`. Nelle prime due settimane è un saluto. «Un pensiero adesso» non ti fa aspettare l'ora.
 - Memoria in `mondo/memoria/cosa-so-di-te.md`. Si cancella a mano o con «dimentica». Il registro non conserva le tue frasi.
 - Prompt e catalogo, da leggere e modificare (poi riavvia): `%LOCALAPPDATA%\Liquidino-dati\prompt\sistema.md` e `catalogo\azioni.json`. Le regole di sicurezza stanno nel programma e valgono anche se li cambi.
-- Impostazioni: cartella del motore, carattere, voce, «Prova il contesto sul serio», «Togli internet a llama-server», «Prova la voce», «Copia dettagli errore».
+- Impostazioni (il Mainframe): pagina **Modelli**, cartella del motore, carattere, voce, «Prova il contesto sul serio», «Togli internet a llama-server», «Prova la voce», «Copia dettagli errore».
 
 Trascina un'immagine sull'avatar: se c'è Omni (o VL) la guarda. Un altro tipo di file: te lo dice e non lo tocca.
 

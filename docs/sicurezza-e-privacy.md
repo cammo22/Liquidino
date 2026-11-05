@@ -1,6 +1,6 @@
 # Sicurezza e privacy
 
-Principio di Liquidino: sta sul PC, pensa in locale e non va in rete per ragionare. Questa pagina elenca cosa è vero nella 0.3.0 e quali regole valgono per chi modifica il codice. Per confronto, c'è come lo fa Capri (vedi [progetto-di-riferimento-capri.md](progetto-di-riferimento-capri.md)).
+Principio di Liquidino: sta sul PC, pensa in locale e non va in rete per ragionare. Questa pagina elenca cosa è vero nella 0.4.0 e quali regole valgono per chi modifica il codice. Per confronto, c'è come lo fa Capri (vedi [progetto-di-riferimento-capri.md](progetto-di-riferimento-capri.md)).
 
 ## Cosa resta sul PC
 
@@ -24,15 +24,18 @@ I dati stanno fuori dalla cartella del programma (`%LOCALAPPDATA%\Liquidino`), c
 
 ## Cosa va in rete
 
-Oggi **una sola cosa**: il controllo degli aggiornamenti (Velopack). Il risultato compare nella barra in alto della chat («Aggiornamento X disponibile»). I modelli non si scaricano: se manca un file, Liquidino lo dice e basta.
+Oggi **due cose**: il controllo degli aggiornamenti (Velopack), da solo, e il download di un modello, solo quando lo chiedi tu dalla pagina Modelli. Il risultato degli aggiornamenti compare nella barra in alto della chat («Aggiornamento X disponibile»).
 
 | Cosa | Destinazione | Quando | Che dati escono |
 |---|---|---|---|
 | Controllo aggiornamenti | `github.com/cammo22/Liquidino/releases/latest/download/releases.win.json` (Velopack) | All'avvio, poi ogni 4 ore, e quando clicchi sulla barra | La normale richiesta HTTP del file, niente di tuo. Se c'è una versione nuova, scarica anche il suo pacchetto dalla stessa release. Solo se Liquidino è installato col Setup. |
+| Download di un modello | `huggingface.co/api/models/LiquidAI/<repo>` (revisione ed elenco dei file), poi `huggingface.co/LiquidAI/<repo>/resolve/<revisione>/<file>`, che rimanda al CDN di Hugging Face (per esempio `cas-bridge.xethub.hf.co` o `cdn-lfs.hf.co`) | Solo quando premi **Scarica** nella pagina Modelli e rispondi sì alla domanda col peso | Richieste HTTP normali con `User-Agent: Liquidino/1`, niente token né account, niente di tuo. Solo i sei repository `LiquidAI/...-GGUF` scritti in `CatalogoModelli`. Il file si salva come `.part` e si installa solo se la sua impronta SHA-256 è quella che Hugging Face dichiara per quella revisione; se no si cancella. |
 
 Il server dei modelli (`llama-server`) parte solo su `127.0.0.1`, con `--offline`, una cache vuota e `HF_HUB_OFFLINE=1`: non vede né scarica modelli da Hugging Face. Il client parla con lui senza proxy di sistema.
 
 **Regola del firewall.** Impostazioni → «Togli internet a llama-server» crea una regola di Windows Firewall in uscita, `Liquidino - llama-server senza internet`, che blocca il programma `llama-server.exe` trovato nella cartella del motore. Serve l'amministratore una volta (la finestra di Windows), e se dici no non succede niente. Il traffico su `127.0.0.1` non passa dal firewall, quindi Liquidino continua a usarlo. Se cambi la cartella del motore, premi di nuovo il tasto: la regola vecchia viene tolta e rifatta per il nuovo percorso. Si toglie a mano da «Windows Defender Firewall con sicurezza avanzata» → Regole in uscita.
+
+**Elimina** nella pagina Modelli spegne il motore e manda i file nel Cestino di Windows. Tocca solo file dentro la cartella dei modelli.
 
 Ogni nuova chiamata di rete va documentata qui, nella tabella, nello stesso commit.
 

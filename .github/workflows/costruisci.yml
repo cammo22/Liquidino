@@ -28,6 +28,18 @@ jobs:
       - name: Prove
         run: dotnet test Liquidino.sln -c Release --nologo
 
+      - name: Catalogo dei modelli su Hugging Face
+        timeout-minutes: 4
+        shell: pwsh
+        env:
+          LIQUIDINO_HF: "1"
+          LIQUIDINO_HF_ESITO: ${{ runner.temp }}/catalogo-hf.txt
+        run: |
+          dotnet test test/Liquidino.Prove/Liquidino.Prove.csproj -c Release --nologo --no-build --filter "FullyQualifiedName~ProvaCatalogoHf"
+          $codice = $LASTEXITCODE
+          if (Test-Path $env:LIQUIDINO_HF_ESITO) { Get-Content $env:LIQUIDINO_HF_ESITO }
+          exit $codice
+
       - name: Prova con llama-server
         timeout-minutes: 8
         shell: pwsh

@@ -1,5 +1,25 @@
 # Novità
 
+## 0.4.0
+
+### Novità
+
+- La pagina **Modelli** (Impostazioni → Modelli): tutti e sei i modelli LFM3, a cosa serve ognuno, se c'è e quanto pesa. **Scarica** chiede il tuo sì col peso vero, mostra l'avanzamento, si annulla, e installa il file solo se l'impronta SHA-256 è quella dichiarata da Hugging Face. **Elimina** spegne il motore e manda i file nel Cestino. Tasti per aprire la cartella dei modelli, del motore, dei dati e del programma.
+- Le impostazioni hanno l'aspetto del **Mainframe**: bande scure, nomi rossi, interruttori OFF/ON, selettori ◁ ▷ e una spiegazione sotto ogni voce. Grafica scritta da noi.
+- Il ciclo dei pensieri si sceglie fra durate fisse (da 15 minuti a 4 ore), e le ore della notte con le frecce.
+
+### Correzioni
+
+- In CI una prova controlla che ogni modello del catalogo esista davvero su Hugging Face, con un GGUF da scegliere.
+
+### Da provare
+
+- Impostazioni → **Modelli**. Ogni riga dice installato o non installato come ti aspetti per la cartella `C:\Users\cammo\LiquidinoProva`.
+- Premi **Cartella dei modelli**: si apre Esplora file lì. Prova anche gli altri tre tasti.
+- Su un modello che non hai (per esempio VL), premi **Scarica**: la domanda deve dire nome del file, peso e cartella. Rispondi sì, guarda la percentuale, poi premi **Annulla**: nella cartella non deve restare un `.part`.
+- Riscarica fino in fondo. La riga diventa «installato» e la chat funziona. Poi **Elimina**: il file finisce nel Cestino e la riga torna «non installato».
+- Nel Mainframe cambia carattere, voce e minuti del ciclo, premi Salva, riapri: devono essere rimasti.
+
 ## 0.3.0
 
 ### Novità

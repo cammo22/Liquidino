@@ -132,7 +132,14 @@ public static class ProvaAvvio
             impostazioni.Show();
             await Attesa(2500);
             impostazioni.Close();
-            riga("PASS impostazioni");
+            riga("PASS impostazioni (Mainframe)");
+
+            var modelli = new FinestraModelli(ponte);
+            modelli.Show();
+            await Attesa();
+            Verifica(modelli.Schede == CatalogoModelli.Tutti.Count, "la pagina dei modelli mostra tutto il catalogo");
+            modelli.Close();
+            riga("PASS pagina dei modelli (senza scaricare niente)");
 
             var novita = new FinestraNovita();
             novita.Show();

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using Liquidino.Nucleo;
@@ -5,29 +6,38 @@ using Microsoft.Win32;
 
 namespace Liquidino;
 
-/// <summary>Cartella di llama.cpp, ciclo orario, carattere e voce. Tutto resta su questo PC.</summary>
+/// <summary>
+/// Il Mainframe: tutte le impostazioni di Liquidino in una finestra, a due colonne.
+/// Le scelte valgono quando premi Salva; prova della voce, prove e firewall partono subito.
+/// </summary>
 public sealed class FinestraImpostazioni : Window
 {
+    static readonly int[] Minuti = [15, 30, 45, 60, 90, 120, 180, 240];
+
     readonly Ponte _ponte;
+    readonly TextBox _nome;
+    readonly Mainframe.Selettore _carattere;
+    readonly Mainframe.Selettore _voce;
+    readonly Mainframe.Interruttore _voceWindows;
+    readonly Mainframe.Interruttore _ciclo;
+    readonly Mainframe.Selettore _minuti;
+    readonly Mainframe.Selettore _notteInizio;
+    readonly Mainframe.Selettore _notteFine;
     readonly TextBox _cartella;
     readonly TextBox _porta;
-    readonly TextBox _minuti;
-    readonly CheckBox _ciclo;
-    readonly ComboBox _carattere;
-    readonly ComboBox _voce;
-    readonly CheckBox _voceWindows;
-    readonly WrapPanel _strumenti;
     readonly TextBlock _esito;
     readonly TextBlock _contesto;
     readonly TextBlock _statoFirewall;
+    readonly TextBlock _motore;
+    readonly int[] _sceltaMinuti;
 
     public FinestraImpostazioni(Ponte ponte)
     {
         _ponte = ponte;
         var imp = ponte.Impostazioni;
-        Title = "Impostazioni";
-        Width = 560;
-        Height = 640;
+        Title = "Mainframe";
+        Width = 1000;
+        Height = 720;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -35,96 +45,23 @@ public sealed class FinestraImpostazioni : Window
         Topmost = true;
         ResizeMode = ResizeMode.NoResize;
 
-        var pila = new StackPanel { Margin = new Thickness(24) };
-        pila.Children.Add(new TextBlock { Text = "IMPOSTAZIONI", FontFamily = Stile.Marchio, FontSize = 16, Foreground = Stile.OroP, Margin = new Thickness(0, 0, 0, 8) });
-        pila.Children.Add(Etichetta("Cartella del motore (llama.cpp e i GGUF)"));
-        var riga = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var sfoglia = Stile.Bottone("Sfoglia");
-        sfoglia.Click += (_, _) => Sfoglia();
-        DockPanel.SetDock(sfoglia, Dock.Right);
-        _cartella = Stile.Campo();
-        _cartella.Text = imp.CartellaMotore;
-        _cartella.Foreground = Stile.Inchiostro;
-        riga.Children.Add(sfoglia);
-        riga.Children.Add(_cartella);
-        pila.Children.Add(riga);
+        _esito = Mainframe.Nota("");
+        _esito.Foreground = Mainframe.CianoP;
 
-        pila.Children.Add(Etichetta("Porta locale (solo 127.0.0.1)"));
-        _porta = Stile.Campo();
-        _porta.Text = imp.Porta.ToString();
-        _porta.Foreground = Stile.Inchiostro;
-        _porta.Width = 120;
-        _porta.HorizontalAlignment = HorizontalAlignment.Left;
-        pila.Children.Add(_porta);
+        // ---------- colonna sinistra: tu, voce, pensieri e notte ----------
+        var sinistra = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
 
-        _ciclo = new CheckBox
-        {
-            Content = "Un pensiero ogni tanto, nella sua cartella",
-            IsChecked = imp.CicloAutonomo,
-            Foreground = Stile.Inchiostro,
-            FontFamily = Stile.Testo,
-            FontSize = 16,
-            Margin = new Thickness(0, 12, 0, 4)
-        };
-        pila.Children.Add(_ciclo);
-        pila.Children.Add(Etichetta("Minuti fra un pensiero e l'altro"));
-        _minuti = Stile.Campo();
-        _minuti.Text = imp.CicloMinuti.ToString();
-        _minuti.Foreground = Stile.Inchiostro;
-        _minuti.Width = 120;
-        _minuti.HorizontalAlignment = HorizontalAlignment.Left;
-        pila.Children.Add(_minuti);
+        sinistra.Children.Add(Mainframe.Sezione("Tu", out var tu));
+        _nome = Mainframe.Campo(imp.NomeUtente);
+        tu.Children.Add(Mainframe.Riga("Come ti chiama", _nome));
+        _carattere = new Mainframe.Selettore(ImpostazioniUtente.Caratteri, Array.IndexOf(ImpostazioniUtente.Caratteri, imp.Carattere));
+        var descrizioneCarattere = Mainframe.Nota(ImpostazioniUtente.DescrizioneCarattere(imp.Carattere));
+        _carattere.Cambiato += i => descrizioneCarattere.Text = ImpostazioniUtente.DescrizioneCarattere(ImpostazioniUtente.Caratteri[i]);
+        tu.Children.Add(Mainframe.Riga("Carattere", _carattere));
+        tu.Children.Add(descrizioneCarattere);
 
-        pila.Children.Add(Etichetta("Carattere"));
-        _carattere = new ComboBox { FontFamily = Stile.Testo, FontSize = 16, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var c in ImpostazioniUtente.Caratteri) _carattere.Items.Add(c);
-        _carattere.SelectedItem = imp.Carattere;
-        pila.Children.Add(_carattere);
-
-        pila.Children.Add(Etichetta("Voce"));
-        _voce = new ComboBox { FontFamily = Stile.Testo, FontSize = 16 };
-        _voce.Items.Add("femminile");
-        _voce.Items.Add("maschile");
-        _voce.SelectedIndex = imp.Voce == "male" ? 1 : 0;
-        pila.Children.Add(_voce);
-        _voceWindows = new CheckBox
-        {
-            Content = "Se Omni non c'è o non parla, leggo con le voci italiane di Windows",
-            IsChecked = imp.VoceWindows,
-            Foreground = Stile.Inchiostro,
-            FontFamily = Stile.Testo,
-            FontSize = 16,
-            Margin = new Thickness(0, 8, 0, 2)
-        };
-        pila.Children.Add(_voceWindows);
-        var descrizioneVoci = Stile.Riga("Cerco le voci…", secondario: true);
-        pila.Children.Add(descrizioneVoci);
-        _ = Task.Run(VoceWindows.Descrizione).ContinueWith(t =>
-        {
-            if (t.IsCompletedSuccessfully) descrizioneVoci.Text = t.Result;
-        }, TaskScheduler.FromCurrentSynchronizationContext());
-
-        var misura = Stile.Bottone("Misura di nuovo il PC");
-        misura.HorizontalAlignment = HorizontalAlignment.Left;
-        misura.Margin = new Thickness(0, 16, 0, 0);
-        misura.Click += (_, _) =>
-        {
-            imp.ApplicaContesto(SceltaContesto.Scegli(MisuraPc.Misura()));
-            System.Windows.MessageBox.Show(imp.FraseContesto, "Liquidino");
-        };
-        pila.Children.Add(misura);
-        _contesto = Stile.Riga(TestoContesto(), secondario: true);
-        pila.Children.Add(_contesto);
-
-        _esito = Stile.Riga("", secondario: true);
-        pila.Children.Add(Etichetta("Strumenti"));
-        _strumenti = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        var dettagli = Stile.Bottone("Copia dettagli errore");
-        dettagli.Margin = new Thickness(0, 4, 8, 4);
-        dettagli.Click += (_, _) => CopiaDettagli();
-        _strumenti.Children.Add(dettagli);
-        var provaVoce = Stile.Bottone("Prova la voce");
-        provaVoce.Margin = new Thickness(0, 4, 8, 4);
+        var provaVoce = Mainframe.Tasto("Prova la voce");
+        provaVoce.Margin = new Thickness(0);
         provaVoce.Click += async (_, _) =>
         {
             ApplicaVoce();
@@ -133,11 +70,63 @@ public sealed class FinestraImpostazioni : Window
             catch (OperationCanceledException) { /* STOP: va bene così */ }
             _esito.Text = "Se non hai sentito niente, guarda il volume e l'uscita audio. Il testo resta comunque in chat.";
         };
-        _strumenti.Children.Add(provaVoce);
+        sinistra.Children.Add(Mainframe.Sezione("Voce", out var voce, provaVoce));
+        _voce = new Mainframe.Selettore(["femminile", "maschile"], imp.Voce == "male" ? 1 : 0);
+        voce.Children.Add(Mainframe.Riga("Voce", _voce));
+        _voceWindows = new Mainframe.Interruttore(imp.VoceWindows);
+        voce.Children.Add(Mainframe.Riga("Voci di Windows", _voceWindows, "Se Omni non c'è o non parla, legge con le voci italiane già installate in Windows."));
+        var descrizioneVoci = Mainframe.Nota("Cerco le voci…");
+        voce.Children.Add(descrizioneVoci);
+        _ = Task.Run(VoceWindows.Descrizione).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully) descrizioneVoci.Text = t.Result;
+        }, TaskScheduler.FromCurrentSynchronizationContext());
 
-        var provaContesto = Stile.Bottone("Prova il contesto sul serio");
-        provaContesto.Margin = new Thickness(0, 4, 8, 4);
-        provaContesto.ToolTip = "Riempie davvero la memoria del motore, partendo da 128K e scendendo finché regge. Può volerci qualche minuto. STOP la ferma.";
+        sinistra.Children.Add(Mainframe.Sezione("Pensieri e notte", out var pensieri));
+        _ciclo = new Mainframe.Interruttore(imp.CicloAutonomo);
+        pensieri.Children.Add(Mainframe.Riga("Un pensiero ogni tanto", _ciclo, "Lascia un pensiero breve in mondo/idee. Nelle prime due settimane è un saluto."));
+        _sceltaMinuti = Minuti.Contains(imp.CicloMinuti) ? Minuti : Minuti.Append(imp.CicloMinuti).Order().ToArray();
+        _minuti = new Mainframe.Selettore(_sceltaMinuti.Select(TestoMinuti).ToList(), Array.IndexOf(_sceltaMinuti, imp.CicloMinuti));
+        pensieri.Children.Add(Mainframe.Riga("Ogni", _minuti));
+        var ore = Enumerable.Range(0, 24).Select(h => h.ToString("00") + ":00").ToList();
+        _notteInizio = new Mainframe.Selettore(ore, Math.Clamp(imp.OraNotteInizio, 0, 23));
+        _notteFine = new Mainframe.Selettore(ore, Math.Clamp(imp.OraNotteFine, 0, 23));
+        pensieri.Children.Add(Mainframe.Riga("Dorme dalle", _notteInizio));
+        pensieri.Children.Add(Mainframe.Riga("Fino alle", _notteFine, "Di notte scarica i modelli e scrive il diario della giornata. Se hai usato la chat da poco, aspetta."));
+
+        // ---------- colonna destra: motore, modelli, contesto, sicurezza, strumenti ----------
+        var destra = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+
+        var apriModelli = Mainframe.Tasto("Modelli");
+        apriModelli.Margin = new Thickness(0);
+        apriModelli.Click += (_, _) => ApriModelli();
+        destra.Children.Add(Mainframe.Sezione("Motore", out var motore, apriModelli));
+        var rigaCartella = new DockPanel();
+        var sfoglia = Mainframe.Tasto("Sfoglia");
+        sfoglia.Margin = new Thickness(6, 0, 0, 0);
+        sfoglia.Click += (_, _) => Sfoglia();
+        DockPanel.SetDock(sfoglia, Dock.Right);
+        _cartella = Mainframe.Campo(imp.CartellaMotore);
+        rigaCartella.Children.Add(sfoglia);
+        rigaCartella.Children.Add(_cartella);
+        motore.Children.Add(Mainframe.Riga("Cartella del motore", rigaCartella, "Dove stanno llama-server e la cartella «modelli». La pagina Modelli scarica lì i GGUF."));
+        _porta = Mainframe.Campo(imp.Porta.ToString());
+        _porta.Width = 110;
+        _porta.HorizontalAlignment = HorizontalAlignment.Left;
+        motore.Children.Add(Mainframe.Riga("Porta", _porta, "Solo su 127.0.0.1: il motore ascolta solo questo PC."));
+        _motore = Mainframe.Nota(StatoMotore());
+        motore.Children.Add(_motore);
+
+        _contesto = Mainframe.Nota(TestoContesto());
+        var misura = Mainframe.Tasto("Misura il PC");
+        misura.Click += (_, _) =>
+        {
+            imp.ApplicaContesto(SceltaContesto.Scegli(MisuraPc.Misura()));
+            _contesto.Text = TestoContesto();
+            _esito.Text = imp.FraseContesto;
+        };
+        var provaContesto = Mainframe.Tasto("Prova il contesto sul serio");
+        provaContesto.ToolTip = "Riempie davvero la memoria del motore, partendo da 128K e scendendo finché regge. Può volerci qualche minuto. Lo stesso tasto la ferma.";
         var provaInCorso = false;
         provaContesto.Click += async (_, _) =>
         {
@@ -163,10 +152,17 @@ public sealed class FinestraImpostazioni : Window
                 provaContesto.Content = "Prova il contesto sul serio";
             }
         };
-        _strumenti.Children.Add(provaContesto);
+        destra.Children.Add(Mainframe.Sezione("Contesto", out var contesto));
+        // _contesto è già creato sopra, prima dei tasti che lo aggiornano.
+        contesto.Children.Add(_contesto);
+        var tastiContesto = new WrapPanel();
+        tastiContesto.Children.Add(misura);
+        tastiContesto.Children.Add(provaContesto);
+        contesto.Children.Add(tastiContesto);
 
-        var firewall = Stile.Bottone("Togli internet a llama-server");
-        firewall.Margin = new Thickness(0, 4, 8, 4);
+        destra.Children.Add(Mainframe.Sezione("Sicurezza", out var sicurezza));
+        _statoFirewall = Mainframe.Nota("Regola del firewall: controllo…");
+        var firewall = Mainframe.Tasto("Togli internet a llama-server");
         firewall.ToolTip = "Crea una regola di Windows Firewall. Windows chiede il permesso dell'amministratore una volta.";
         firewall.Click += async (_, _) =>
         {
@@ -186,58 +182,107 @@ public sealed class FinestraImpostazioni : Window
             }
             finally { firewall.IsEnabled = true; }
         };
-        _strumenti.Children.Add(firewall);
-        _statoFirewall = Stile.Riga("Regola del firewall: controllo…", secondario: true);
-        pila.Children.Add(_strumenti);
-        pila.Children.Add(_statoFirewall);
-        pila.Children.Add(_esito);
+        sicurezza.Children.Add(Mainframe.Riga("Permesso del PC", new TextBlock
+        {
+            Text = imp.PermessoPc ? "acceso" : "spento",
+            FontFamily = Stile.Testo,
+            FontSize = 16,
+            Foreground = imp.PermessoPc ? Mainframe.CianoP : Mainframe.RossoP
+        }, "Si cambia col tasto 🖥️ vicino all'avatar. Acceso: apre programmi dopo il tuo sì, cartelle, volume e guarda lo schermo."));
+        sicurezza.Children.Add(_statoFirewall);
+        sicurezza.Children.Add(firewall);
 
-        var tasti = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 18, 0, 0) };
-        var salva = Stile.Bottone("Salva", principale: true);
+        destra.Children.Add(Mainframe.Sezione("Strumenti", out var strumenti));
+        var tastiStrumenti = new WrapPanel();
+        var dettagli = Mainframe.Tasto("Copia dettagli errore");
+        dettagli.Click += (_, _) => CopiaDettagli();
+        var cartellaDati = Mainframe.Tasto("Cartella dei dati");
+        cartellaDati.ToolTip = Percorsi.RadiceDati();
+        cartellaDati.Click += (_, _) => Apri(Percorsi.RadiceDati());
+        tastiStrumenti.Children.Add(dettagli);
+        tastiStrumenti.Children.Add(cartellaDati);
+        strumenti.Children.Add(tastiStrumenti);
+
+        // ---------- insieme ----------
+        var colonne = new Grid { Margin = new Thickness(20, 0, 20, 0) };
+        colonne.ColumnDefinitions.Add(new ColumnDefinition());
+        colonne.ColumnDefinitions.Add(new ColumnDefinition());
+        colonne.Children.Add(sinistra);
+        Grid.SetColumn(destra, 1);
+        colonne.Children.Add(destra);
+
+        var salva = Mainframe.Tasto("Salva");
         salva.Click += async (_, _) =>
         {
             try { await Salva(); }
-            catch (Exception e) { System.Windows.MessageBox.Show("Questo fallo tu: non sono riuscito a salvare. " + e.Message, "Liquidino"); }
+            catch (Exception e) { _esito.Text = "Questo fallo tu: non sono riuscito a salvare. " + e.Message; }
         };
-        var chiudi = Stile.Bottone("Chiudi");
+        var chiudi = Mainframe.Tasto("Chiudi", pericolo: true);
         chiudi.Click += (_, _) => Close();
+
+        var piede = new DockPanel { Margin = new Thickness(20, 6, 20, 14) };
+        var tasti = new StackPanel { Orientation = Orientation.Horizontal };
         tasti.Children.Add(salva);
         tasti.Children.Add(chiudi);
-        pila.Children.Add(tasti);
+        DockPanel.SetDock(tasti, Dock.Right);
+        piede.Children.Add(tasti);
+        piede.Children.Add(_esito);
 
-        Content = new Border
-        {
-            Background = Stile.Fondo,
-            BorderBrush = Stile.Pennello("#33ffffff"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(16),
-            Child = new ScrollViewer { Content = pila, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
-        };
+        var tutto = new DockPanel();
+        var modelliAlto = Mainframe.Tasto("Modelli");
+        modelliAlto.Click += (_, _) => ApriModelli();
+        var testata = Mainframe.Testata("MAINFRAME", modelliAlto);
+        DockPanel.SetDock(testata, Dock.Top);
+        DockPanel.SetDock(piede, Dock.Bottom);
+        tutto.Children.Add(testata);
+        tutto.Children.Add(piede);
+        tutto.Children.Add(new ScrollViewer { Content = colonne, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Content = Mainframe.Cornice(tutto);
+
         Loaded += async (_, _) =>
         {
             try { await AggiornaFirewall(); }
             catch { _statoFirewall.Text = "Regola del firewall: non riesco a leggerla."; }
         };
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
         MouseLeftButtonDown += (_, e) =>
         {
-            if (e.OriginalSource is Button or TextBox or ComboBox or CheckBox) return;
+            if (e.OriginalSource is Button or TextBox) return;
             try { DragMove(); } catch { /* già rilasciato */ }
         };
     }
 
-    static TextBlock Etichetta(string testo) => new()
+    static string TestoMinuti(int minuti) => minuti < 60 ? minuti + " min" : minuti % 60 == 0 ? minuti / 60 + " h" : minuti / 60 + " h " + minuti % 60 + " min";
+
+    string StatoMotore()
     {
-        Text = testo,
-        FontFamily = Stile.Marchio,
-        FontSize = 12,
-        Foreground = Stile.CianoP,
-        Margin = new Thickness(0, 10, 0, 4)
-    };
+        var r = _ponte.Regista.Rilevazione;
+        var exe = r.Eseguibile is null ? "llama-server non trovato" : "llama-server trovato";
+        var n = r.Modelli.Count;
+        return exe + " · " + (n == 0 ? "nessun modello" : n == 1 ? "1 modello" : n + " modelli") + " in " + r.CartellaModelli;
+    }
+
+    void ApriModelli()
+    {
+        var finestra = new FinestraModelli(_ponte) { Owner = this };
+        finestra.ShowDialog();
+        _motore.Text = StatoMotore();
+    }
+
+    void Apri(string cartella)
+    {
+        try
+        {
+            Directory.CreateDirectory(cartella);
+            using (Process.Start(new ProcessStartInfo("explorer.exe", "\"" + cartella + "\"") { UseShellExecute = true })) { }
+        }
+        catch (Exception e) { _esito.Text = "Questo fallo tu: non riesco ad aprire " + cartella + ". " + e.Message; }
+    }
 
     string TestoContesto()
     {
         var imp = _ponte.Impostazioni;
-        return "Contesto attuale: mani " + imp.ContestoMani + ", Omni " + imp.ContestoOmni + ", d1 " + imp.ContestoD1 + "."
+        return "Mani " + imp.ContestoMani / 1024 + "K, Omni " + imp.ContestoOmni / 1024 + "K, d1 " + imp.ContestoD1 / 1024 + "K."
             + (string.IsNullOrWhiteSpace(imp.FraseContesto) ? "" : " " + imp.FraseContesto);
     }
 
@@ -260,8 +305,8 @@ public sealed class FinestraImpostazioni : Window
     void ApplicaVoce()
     {
         var imp = _ponte.Impostazioni;
-        imp.Voce = _voce.SelectedIndex == 1 ? "male" : "female";
-        imp.VoceWindows = _voceWindows.IsChecked == true;
+        imp.Voce = _voce.Indice == 1 ? "male" : "female";
+        imp.VoceWindows = _voceWindows.Acceso;
     }
 
     void CopiaDettagli()
@@ -288,12 +333,17 @@ public sealed class FinestraImpostazioni : Window
     async Task Salva()
     {
         var imp = _ponte.Impostazioni;
+        var nome = _nome.Text.Trim();
+        if (nome.Length > 0) imp.NomeUtente = nome.Length > 40 ? nome[..40] : nome;
+        imp.Carattere = _carattere.Valore;
         imp.CartellaMotore = _cartella.Text.Trim();
         if (int.TryParse(_porta.Text.Trim(), out var porta) && porta is > 0 and < 65536) imp.Porta = porta;
-        imp.CicloAutonomo = _ciclo.IsChecked == true;
-        if (int.TryParse(_minuti.Text.Trim(), out var minuti)) imp.CicloMinuti = Math.Clamp(minuti, 5, 24 * 60);
-        if (_carattere.SelectedItem is string carattere) imp.Carattere = carattere;
+        imp.CicloAutonomo = _ciclo.Acceso;
+        imp.CicloMinuti = Math.Clamp(_sceltaMinuti[_minuti.Indice], 5, 24 * 60);
+        imp.OraNotteInizio = _notteInizio.Indice;
+        imp.OraNotteFine = _notteFine.Indice;
         ApplicaVoce();
+        _esito.Text = "Salvo e riaccendo il motore…";
         await _ponte.RicaricaMotore();
         Close();
     }

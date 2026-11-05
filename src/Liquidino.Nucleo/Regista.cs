@@ -50,6 +50,9 @@ public sealed class Regista : IRegista
 
     public string? UltimoErrore { get; private set; }
 
+    /// <summary>Cosa ha trovato nella cartella del motore: eseguibile, cartella dei modelli e GGUF.</summary>
+    public Rilevazione Rilevazione => _rilevazione;
+
     /// <summary>Il llama-server trovato nella cartella del motore, o null.</summary>
     public string? Eseguibile => _rilevazione.Eseguibile;
 

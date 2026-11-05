@@ -44,7 +44,7 @@ La CI (`.github/workflows/costruisci.yml`) esegue, a ogni push e a ogni pull req
 ## Regole di prodotto (da non rompere)
 
 1. **Niente rete oltre al controllo aggiornamenti.** Nuove chiamate di rete o tracciamenti si chiedono prima e si scrivono in [sicurezza-e-privacy.md](sicurezza-e-privacy.md).
-2. **Nessun modello scaricato in automatico.** Se manca, lo dice.
+2. **Nessun modello scaricato senza il tuo clic.** Se manca, lo dice. Si scarica solo dalla pagina Modelli, dopo la domanda col peso vero, e si installa solo se l'impronta SHA-256 torna.
 3. **Mai dire di aver fatto una cosa che il programma non ha fatto.** Se non può: «Questo fallo tu:» e il perché.
 4. **Azioni che inviano, pubblicano, comprano, cancellano o installano** passano da una conferma, salvo richiesta esplicita di quell'azione.
 5. **Il mondo non esce dalla sua cartella.** Usa `Percorsi.StaDentro` prima di toccare un file scelto da un percorso esterno.
