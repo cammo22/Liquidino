@@ -23,6 +23,7 @@
 - «Un pensiero adesso» funziona anche col ciclo spento e di notte. Uno STOP mentre pensa non apre più la finestra d'errore.
 - Se `impostazioni.json` si rovina, lo mette da parte e te lo dice, invece di perderlo.
 - Lo STOP cancella anche la domanda ancora aperta.
+- Lo slot della cache si salva davvero su disco prima di scaricare un modello, e si ripristina quando torna: prima la richiesta non diceva al router per quale modello era. L'ha trovato la prova di carico, con un llama-server vero.
 
 ### Da provare
 
