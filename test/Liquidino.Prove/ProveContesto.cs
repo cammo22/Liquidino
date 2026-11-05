@@ -64,6 +64,11 @@ public class ProveContesto
         Assert.False(ProvaContesto.Regge(1000, 799));
         Assert.False(ProvaContesto.Regge(1000, null));
         Assert.Equal(117964, ProvaContesto.Obiettivo(131072));
+        // Il campione resta più corto (in caratteri) dei token voluti, quindi non sfora mai il contesto.
+        Assert.Equal(100, ProvaContesto.CampionePer(100));
+        Assert.Equal(100, ProvaContesto.CampionePer(10));
+        Assert.Equal(2000, ProvaContesto.CampionePer(117964));
+        Assert.Equal(2000, ProvaContesto.CampionePer(7372));
     }
 
     [Fact]

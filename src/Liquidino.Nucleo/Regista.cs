@@ -234,7 +234,7 @@ public sealed class Regista : IRegista
                 return risp.TokenPrompt;
             }
             var base0 = await Leggi("ok", TimeSpan.FromSeconds(60)).ConfigureAwait(false);
-            var campione = ProvaContesto.Riempitivo(ProvaContesto.Campione);
+            var campione = ProvaContesto.Riempitivo(ProvaContesto.CampionePer(voluti));
             var base1 = await Leggi(campione, TimeSpan.FromSeconds(90)).ConfigureAwait(false);
             if (base0 is not int b0 || base1 is not int b1 || b1 <= b0)
                 return new Riempimento(null, null, "il motore non dice quanti token ha letto");

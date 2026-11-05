@@ -47,6 +47,12 @@ public static class ProvaContesto
 
     public static int Obiettivo(int contesto) => (int)(contesto * Quota);
 
+    /// <summary>
+    /// Quanti caratteri usare per misurare il valore di un token. Un carattere vale meno di un token,
+    /// quindi un campione lungo quanto i token voluti resta sempre sotto il contesto da riempire.
+    /// </summary>
+    public static int CampionePer(int voluti) => Math.Clamp(voluti, 100, Campione);
+
     public static bool Regge(int contesto, int? letti) => letti is int n && n >= contesto * Soglia;
 
     /// <summary>
