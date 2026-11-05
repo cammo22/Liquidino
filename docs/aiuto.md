@@ -1,6 +1,6 @@
 # Aiuto per l'utente
 
-Guida rapida di Liquidino 0.3.0 e soluzioni ai problemi più comuni. C'è scritto solo quello che il programma fa davvero.
+Guida rapida di Liquidino 0.4.0 e soluzioni ai problemi più comuni. C'è scritto solo quello che il programma fa davvero.
 
 ## In breve
 
@@ -15,7 +15,7 @@ Liquidino è un compagno da desktop per Windows a 64 bit. Parla italiano, sta su
 5. Apri Liquidino dall'icona sul desktop o dal menu Start.
 6. Al primo avvio scegli il tuo nome, il carattere e la voce.
 
-I modelli **non** sono nell'installer. Si cercano in `C:\Users\cammo\LiquidinoProva`; se stanno altrove si cambia da Impostazioni. Se un modello manca, Liquidino lo dice e non lo scarica.
+I modelli **non** sono nell'installer. Si cercano in `C:\Users\cammo\LiquidinoProva`; se stanno altrove si cambia da Impostazioni. Se un modello manca, Liquidino lo dice. Lo scarichi tu dalla pagina **Modelli** (vedi sotto).
 
 ## Il tuo compagno
 
@@ -24,6 +24,20 @@ I modelli **non** sono nell'installer. Si cercano in `C:\Users\cammo\LiquidinoPr
 - **Parla** è un interruttore: il primo clic ascolta, il secondo manda la frase. Stessa cosa con `Ctrl+Spazio`.
 - **STOP** ferma tutto, cancella la domanda aperta e scarica i modelli. Si può premere anche due volte. In chat, `Esc` ferma il turno.
 - **Immagini**: trascina un'immagine sull'avatar. Se c'è Omni (o VL) la guarda. Un altro tipo di file: te lo dice e non lo tocca.
+
+
+## Impostazioni (il Mainframe) e la pagina Modelli
+
+Le impostazioni ora hanno l'aspetto del **Mainframe**: bande scure, nomi in rosso a sinistra, valori a destra, interruttori OFF/ON e selettori con le frecce ◁ ▷. Sotto ogni voce c'è scritto a cosa serve. Esc chiude, **Salva** salva e riaccende il motore.
+
+In alto c'è **Modelli**. Lì ci sono tutti i modelli di Liquidino, uno per riga:
+
+- **a cosa serve**: per esempio LFM3-1.7B sono le mani (capiscono cosa vuoi fare), Omni parla, ascolta e guarda, d1 decide, VL guarda le immagini;
+- **stato**: installato (con nome del file e peso) o non installato;
+- **Scarica**: chiede a Hugging Face i file della revisione attuale, sceglie Q4_K_M (e il proiettore, se il modello vede o sente), ti dice il peso vero e chiede se procedere. Durante il download vedi i MB e la percentuale; lo stesso tasto diventa **Annulla**. Il file si installa solo se l'impronta SHA-256 torna. Poi il motore si riaccende e lo trova;
+- **Elimina**: spegne il motore e manda i file nel Cestino di Windows, così puoi ripensarci.
+
+Sopra ci sono i tasti **Cartella dei modelli**, **Cartella del motore**, **Cartella dei dati** e **Cartella del programma**: aprono Esplora file nel posto giusto.
 
 ## Cosa sa fare
 
@@ -98,7 +112,8 @@ Dall'elenco delle app di Windows: Velopack registra la disinstallazione. I tuoi 
 |---|---|
 | Windows mostra «Windows ha protetto il PC» | L'installer non è firmato. **Ulteriori informazioni**, poi **Esegui comunque**. Scarica solo dalla pagina delle release e controlla `SHA256SUMS.txt`. |
 | L'antivirus segnala il Setup | Di solito è un falso positivo su un programma non firmato. Controlla l'impronta, poi consenti il file. |
-| «Manca un modello» | Metti i file GGUF nella cartella dei modelli, o indica quella giusta in Impostazioni. Non scarica nulla da solo. |
+| «Manca un modello» | Impostazioni → **Modelli** → **Scarica** sul modello che manca. Oppure metti i file GGUF a mano nella cartella dei modelli, o indica quella giusta in Impostazioni. Non scarica nulla da solo. |
+| Il download si ferma o dice «impronta» | Il file arrivato non è quello giusto (rete instabile o file cambiato a metà). Il pezzo scaricato viene tolto: premi di nuovo Scarica. Serve spazio libero: il peso del modello più mezzo GB. |
 | Risposte lente o il PC fatica | Il regista tiene accesi al massimo due modelli. Chiudi giochi e programmi pesanti. Poi Impostazioni → «Prova il contesto sul serio»: sceglie il contesto che il PC regge davvero. |
 | Non sento la voce | Controlla uscita audio e volume. Senza Omni serve una voce italiana di Windows: Impostazioni → «Prova la voce» dice quali ha trovato. |
 | Non mi ascolta quando parlo | Il tasto Parla è un interruttore: il secondo clic invia. Per trascrivere serve Omni. La parola «Ehi Liquidino» non esiste ancora. |
