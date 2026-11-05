@@ -40,6 +40,17 @@ jobs:
           if (Test-Path $env:LIQUIDINO_HF_ESITO) { Get-Content $env:LIQUIDINO_HF_ESITO }
           exit $codice
 
+      - name: Parakeet in cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/liquidino-modelli/parakeet-tdt-0.6b-v3
+          key: parakeet-v3-int8-${{ hashFiles('src/Liquidino.Nucleo/Trascrittore.cs') }}
+
+      - name: Orecchie con Parakeet vero
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./scripts/prova-orecchie.ps1
+
       - name: Prova con llama-server
         timeout-minutes: 8
         shell: pwsh

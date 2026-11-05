@@ -36,7 +36,7 @@ La CI (`.github/workflows/costruisci.yml`) esegue, a ogni push e a ogni pull req
 
 - Segui lo stile dei file vicini: nomi in italiano, semplici, `record` sealed per i dati, classi `static` per le utilità pure.
 - La logica va in `Liquidino.Nucleo`, senza interfaccia. In `Liquidino` (WPF) restano finestre e collegamenti. Così si prova senza aprire finestre.
-- Ogni funzione nuova ha una prova in `test/Liquidino.Prove`. I file sono per argomento (`ProveNucleo.cs`, `ProveMani.cs`, `ProveCreazioni.cs`, `ProveSicurezza.cs`, `ProveVoce.cs`, `ProveContesto.cs`); `Finti.cs` ha il regista finto e gli aiuti. Lo stile: nome che racconta il comportamento, `Assert` chiari.
+- Ogni funzione nuova ha una prova in `test/Liquidino.Prove`. I file sono per argomento (`ProveNucleo.cs`, `ProveMani.cs`, `ProveCreazioni.cs`, `ProveSicurezza.cs`, `ProveVoce.cs`, `ProveContesto.cs`, `ProveModelli.cs`, `ProveOrecchie.cs`); `Finti.cs` ha il regista finto e gli aiuti. Lo stile: nome che racconta il comportamento, `Assert` chiari.
 - Niente commenti che ripetono il codice. I commenti `///` spiegano il perché di una classe (vedi `Percorsi.cs`).
 - Nullable attivo: niente `!` per zittire gli avvisi senza motivo.
 - I testi che vede l'utente sono in italiano, dai del tu, frasi corte.

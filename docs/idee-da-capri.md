@@ -19,8 +19,9 @@ Legenda: ✅ c'è già · 🟡 c'è in parte o è in roadmap · 💡 idea nuova 
 |---|---|
 | Voce locale gratuita (Kokoro) | ✅ Piano B: le voci italiane di Windows (SAPI), già sul PC. Kokoro resta un'idea. |
 | Cursori di tono e velocità, effetti | 💡 |
-| Parola di attivazione («Hey Capri») | 🟡 «Ehi Liquidino»: struttura pronta, manca il modello addestrato. |
-| Riconoscimento vocale locale | 🟡 Silero VAD e struttura `orecchio/`. |
+| Parola di attivazione («Hey Capri») | ✅ «babbasone»: Parakeet trascrive e la parola si tara sulle tue registrazioni (lo spotter di Capri è solo inglese). |
+| Riconoscimento vocale locale | ✅ Parakeet v3 int8 con sherpa-onnx, come Capri; rilevatore di voce sull'energia, scritto da noi. |
+| Ears: audio del PC, call mode | ✅ 👂 sente il PC tranne la sua voce; 📞 sente Discord a parte; la sua voce nel microfono con VB-CABLE. «Listen to this» non c'è: non serviva. |
 | Avviso sul microfono Bluetooth che peggiora l'audio | 💡 Nota nell'aiuto o avviso nel setup. |
 
 ## Memoria e personalità

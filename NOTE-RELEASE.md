@@ -1,4 +1,4 @@
-Liquidino 0.4.0, per Windows a 64 bit.
+Liquidino 0.5.0, per Windows a 64 bit.
 
 1. Chiudi Liquidino se è aperto.
 2. Scarica `Liquidino-Setup.exe` e fai doppio clic. Non servono i diritti di amministratore.
@@ -7,8 +7,10 @@ Liquidino 0.4.0, per Windows a 64 bit.
 
 Cosa c'è di nuovo:
 
-- La pagina Modelli: a cosa serve ogni modello, Scarica (solo dopo il tuo sì, con controllo dell'impronta), Elimina (nel Cestino) e le cartelle a un clic.
-- Le impostazioni col nuovo aspetto Mainframe, con una spiegazione sotto ogni voce.
+- Le Orecchie (👂): lo chiami «babbasone» e ti risponde. Serve Parakeet v3, dalla pagina Modelli.
+- La parola si tara sulle tue registrazioni (Mainframe → Orecchie → Registra la parola).
+- Sente anche l'audio del PC, tranne la sua voce, senza salvarlo.
+- Chiamata su Discord (📞), e la sua voce nel tuo microfono con VB-CABLE.
 
 Per controllare il file: `Get-FileHash .\Liquidino-Setup.exe -Algorithm SHA256` e confronta con `SHA256SUMS.txt`.
 

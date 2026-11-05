@@ -1,6 +1,6 @@
 # Architettura di Liquidino
 
-Stato: versione 0.4.0. Scritta leggendo il codice.
+Stato: versione 0.5.0. Scritta leggendo il codice.
 
 ## Stack
 
@@ -27,7 +27,7 @@ Stato: versione 0.4.0. Scritta leggendo il codice.
 | `ManiPc.cs` | `InterpretePc`: capisce con regole chiuse se una frase chiede un gesto sul PC e quale. `IManiPc` è il contratto; `GestoPc` dice se serve il sì. |
 | `Regista.cs` | Accende `llama-server`, carica e scarica i modelli (mai più di due), salva e ripristina gli slot. `ProvaRiempimento` fa la prova di carico. |
 | `ClienteLlama.cs` | Client HTTP verso `127.0.0.1`, senza proxy: health, router dei modelli, chat, `/v1/systemone`, `/tts`, slot. Legge `usage.prompt_tokens`. |
-| `CatalogoModelli.cs` | I sei modelli della pagina Modelli (ruolo, repository `LiquidAI/...-GGUF`, a cosa serve). `ScaricatoreModelli` legge revisione ed elenco da Hugging Face, sceglie il quant, scarica in `.part` e installa solo se lo SHA-256 torna. |
+| `CatalogoModelli.cs` | I sei modelli LFM3 della pagina Modelli, e i modelli fatti di file fissi (`SchedaFissa`, per Parakeet: SHA-256 o impronta git) (ruolo, repository `LiquidAI/...-GGUF`, a cosa serve). `ScaricatoreModelli` legge revisione ed elenco da Hugging Face, sceglie il quant, scarica in `.part` e installa solo se lo SHA-256 torna. |
 | `Modelli.cs` | Trova `llama-server` e i GGUF, ruoli e `mmproj`, scrive il preset senza righe di rete, `PoliticaCarico`. |
 | `Contesto.cs`, `ProvaContesto.cs` | Scelta del contesto da RAM e VRAM; prova di carico a gradini; `RegolaFirewall` (gli script PowerShell). |
 | `Ciclo.cs` | `CicloAutonomo`: il pensiero orario, la fase di amicizia, la notte, il rifacimento guidato, i pensieri piaciuti come esempio. |
@@ -37,7 +37,11 @@ Stato: versione 0.4.0. Scritta leggendo il codice.
 | `Voce.cs` | `SceltaVoce`: Omni, poi Windows, poi solo testo. |
 | `Quiete.cs` | Quando scaricare i modelli e quando addormentarsi; la finestra di silenzio del microfono. |
 | `MigrazioneDati.cs` | Porta i dati dalla cartella della 0.2.0 a `Liquidino-dati`, senza sovrascrivere. |
-| `Orecchio.cs` | Stato della parola «Ehi Liquidino» (il modello non c'è ancora). |
+| `Orecchio.cs` | Cosa dire delle Orecchie: se c'è Parakeet e se la parola è tarata. |
+| `Audio.cs` | `Wav` (leggi e scrivi), `Campioni` (16 kHz mono, ricampiona), `RilevatoreVoce` (frasi dall'energia, blocchi da 100 ms, fondo che si adatta), `Miscela` (voce sopra il microfono senza scatti). |
+| `ParolaSveglia.cs` | La parola («babbasone»): confronto tollerante sulle chiavi fonetiche, taratura sulle tue registrazioni, soglia sopra le parole italiane simili, eco (`Contenuto`). Salva `orecchio/parola.json`. |
+| `Trascrittore.cs` | `TrascrittoreParakeet`: Parakeet TDT 0.6B v3 int8 con sherpa-onnx, sulla CPU. `CatalogoOrecchio`: la sua scheda nella pagina Modelli. |
+| `Udito.cs` | `Orecchie` decide cosa fare di ogni frase (comando tuo, nome da solo, chiamata, niente); `RegistroAscolto` tiene in memoria gli ultimi minuti; `AppChiamata` e `CavoVirtuale` scelgono Discord e VB-CABLE. |
 | `ImpostazioniUtente.cs`, `Percorsi.cs`, `Stato.cs`, `Semi.cs`, `Testo.cs`, `NoteRilascio.cs`, `ComandiLocali.cs` | Impostazioni (e copia di quelle rovinate), percorsi, stati, file di serie, frasi, note di rilascio, STOP. |
 
 ### L'app WPF
@@ -50,6 +54,9 @@ Stato: versione 0.4.0. Scritta leggendo il codice.
 | `FinestraCasa.cs` | Chat e pannello del mondo (filtri, icone, anteprima, voti, rifacimento, diario). |
 | `FinestraImpostazioni.cs` | Il Mainframe: impostazioni e strumenti (prova del contesto, firewall, voce, dettagli errore). |
 | `FinestraModelli.cs` | La pagina Modelli: stato di ogni modello, Scarica (con domanda e avanzamento), Elimina (nel Cestino), tasti delle cartelle. |
+| `OrecchieWindows.cs` | Le Orecchie dell'app: microfono, audio del PC, chiamata, la fila per Parakeet, la voce nel microfono. |
+| `AudioWindows.cs` | `Dispositivi` (microfoni e uscite), `CatturaProcesso` (l'audio di un programma, o di tutto il PC tranne Liquidino, con `ActivateAudioInterfaceAsync`), `CatturaMicrofono`, `VoceNelMicrofono` (VB-CABLE). |
+| `FinestraParola.cs` | Registra la parola, mostra cosa ha capito Parakeet, tara. |
 | `Mainframe.cs` | I pezzi grafici del Mainframe: sezioni, righe, interruttori OFF/ON, selettori ◁ ▷, tasti, testata. Disegnati da noi. |
 | `ManiWindows.cs` | Le mani vere: programmi dal menu Start (shell `AppsFolder` e collegamenti `.lnk`), cartelle note, tasti del volume, foto dello schermo. |
 | `VoceWindows.cs`, `Firewall.cs` | Voci italiane di SAPI; regola del firewall con UAC. |
@@ -72,7 +79,7 @@ Radice: `%LOCALAPPDATA%\Liquidino-dati` (`Percorsi.RadiceDati()`). Il programma 
 | `prompt/sistema.md`, `catalogo/azioni.json` | Copie modificabili (poi riavvia). Quelle di serie stanno nel programma. |
 | `motore/modelli.ini`, `motore/server.log`, `motore/cache-vuota` | Preset del router, log di llama-server, cache vuota per l'offline. |
 | `slot/` | Slot della cache salvati prima di scaricare un modello. |
-| `orecchio/` | Posto per `silero_vad.onnx` ed `ehi-liquidino.onnx`. |
+| `orecchio/` | `parola.json` (la taratura) e `registrazioni/*.wav` (le tue registrazioni della parola). |
 | `diario-tecnico.log` | Le eccezioni del programma, per il supporto. |
 
 I modelli stanno **fuori** dall'installer (si scaricano dalla pagina Modelli, `FinestraModelli`, solo col tuo clic), di norma in `C:\Users\cammo\LiquidinoProva` (cambiabile da Impostazioni). `Percorsi.StaDentro` controlla che un percorso resti dentro il mondo prima di leggerlo, spostarlo o aprirlo.

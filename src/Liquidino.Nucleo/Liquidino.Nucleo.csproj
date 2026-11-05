@@ -5,4 +5,8 @@
     <AssemblyName>Liquidino.Nucleo</AssemblyName>
     <Description>Il cervello di Liquidino, senza finestre: si può provare anche fuori da Windows.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Parakeet sulla CPU. Apache-2.0. Porta con sé onnxruntime (MIT). -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="2.0.1" />
+  </ItemGroup>
 </Project>

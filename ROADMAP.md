@@ -2,16 +2,16 @@
 
 Avanzamento verso la versione definitiva:
 
-- **Nel programma (0.4.0): 66%.** È scritto, provato dalle prove automatiche e dall'avvio dell'app in CI su Windows.
+- **Nel programma (0.5.0): 75%.** È scritto, provato dalle prove automatiche e dall'avvio dell'app in CI su Windows.
 - **Verificato sul PC di prova: 41%.** Quello della 0.2.1. Sale quando i punti «Da provare» del [CHANGELOG](CHANGELOG.md) passano sul PC con la RTX 4060.
 
 Il 100% è Liquidino che sta sul desktop da solo: ti sente quando lo chiami, fa le cose sul PC solo se glielo permetti, ricorda, crea, e si può far evolvere senza perdere la versione di prima.
 
 | Pezzo | Peso | Nel programma | Verificato | Manca per il 100% |
 | --- | ---: | ---: | ---: | --- |
-| Parola «Ehi Liquidino» | 10 | 0 | 0 | Il modello addestrato da noi, con registrazioni della parola in italiano. La cartella `orecchio/` c'è. Silero VAD è MIT, il codice di openWakeWord è Apache-2.0; i modelli già pronti di openWakeWord non si usano. Per ora: clic, «Parla», Ctrl+Spazio. |
+| Parola «babbasone» e Orecchie | 10 | 8 | 0 | Nel programma: 👂, rilevatore di voce, Parakeet v3 sulla CPU, parola tarata sulle tue registrazioni con soglia sopra le parole simili, audio del PC senza la sua voce, eco delle casse, chiamata su Discord. In CI Parakeet trascrive un WAV vero. Manca la prova sul PC vero, col tuo microfono, e un modello più piccolo sempre acceso se Parakeet pesa troppo sulla CPU. |
 | Uso del PC | 15 | 8 | 2 | Ci sono il permesso, i gesti chiusi (programma dopo il sì, cartelle, volume, pausa, schermo), lo STOP e il registro. Mancano il mouse, la tastiera e il suo cursore sullo schermo, e i livelli di permesso per singolo gesto. |
-| Voce | 10 | 8 | 6 | Capisce e legge con Omni (`/tts`); se Omni non c'è, le voci italiane di Windows. Non si ascolta mentre parla. Manca la voce intrecciata di Omni in italiano, che sulla RTX 4060 non era affidabile. |
+| Voce | 10 | 9 | 6 | Capisce e legge con Omni (`/tts`); se Omni non c'è, le voci italiane di Windows. Non si ascolta mentre parla. In chiamata la sua voce va nel tuo microfono con VB-CABLE. Manca la voce intrecciata di Omni in italiano, che sulla RTX 4060 non era affidabile. |
 | Modelli e dati | 10 | 10 | 8 | Nel programma c'è tutto: caricamento prima di rispondere, due modelli accesi mentre si chiacchiera, dati fuori dalla cartella di Velopack, prova di carico, slot salvato su disco (in CI con un llama-server vero sì; prima non funzionava), regola del firewall. Va provato sul PC. |
 | Interfaccia | 8 | 8 | 7 | C'è il Mainframe e la pagina Modelli (scarica, elimina, cartelle). Manca la bocca sincronizzata (TalkingHead): gli sprite approvati restano, e un viso nuovo vuole l'ok del proprietario. |
 | Memoria e creazioni | 10 | 10 | 5 | Nel programma: note, memoria in markdown, cestino, cartelle, ricerca, icone grandi, anteprima, diario della giornata. Va provato sul PC. |
@@ -24,7 +24,7 @@ Si sale nella colonna «Nel programma» quando un pezzo della colonna «Manca» 
 
 ## Cosa resta, e perché non è già qui
 
-- **«Ehi Liquidino»**: senza un modello addestrato sulla parola detta in italiano non c'è niente da far girare. Servono registrazioni (anche sintetiche) e un addestramento.
+- **«Babbasone» sul PC vero**: la parola e le Orecchie sono provate con prove automatiche e con Parakeet in CI, ma il microfono, la stanza e Discord li ha solo il PC di prova.
 - **Mouse e tastiera**: un clic sbagliato può cancellare o mandare qualcosa. Prima vanno decisi insieme i livelli di permesso e cosa vede Liquidino mentre lo fa.
 - **Evolversi**: un addestramento vero sul PC, con la versione di prima tenuta da parte. È un lavoro a sé, e parte solo se lo chiedi tu.
 - **Bocca che si muove**: serve un viso nuovo, e l'avatar non si rifà senza l'ok del proprietario.

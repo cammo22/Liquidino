@@ -17,7 +17,7 @@ public sealed class FinestraModelli : Window
     readonly TextBlock _esito;
     CancellationTokenSource? _download;
 
-    internal int Schede => CatalogoModelli.Tutti.Count;
+    internal int Schede => _elenco.Children.Count;
 
     public FinestraModelli(Ponte ponte)
     {
@@ -99,6 +99,147 @@ public sealed class FinestraModelli : Window
         _elenco.Children.Clear();
         foreach (var scheda in CatalogoModelli.Tutti)
             _elenco.Children.Add(Scheda(scheda, r.Modelli.FirstOrDefault(m => m.Ruolo == scheda.Ruolo), r.CartellaModelli));
+        _elenco.Children.Add(Scheda(CatalogoOrecchio.Parakeet, r.CartellaModelli));
+    }
+
+    /// <summary>Un modello fatto di file fissi (Parakeet): stessa scheda, stessi tasti.</summary>
+    Border Scheda(SchedaFissa scheda, string cartellaModelli)
+    {
+        var sezione = Mainframe.Sezione(scheda.Nome + "  ·  orecchie", out var righe);
+        righe.Children.Add(Mainframe.Nota(scheda.APerCosa));
+        var presente = scheda.Presente(cartellaModelli);
+        long peso = 0;
+        if (presente)
+            foreach (var f in scheda.File) peso += new FileInfo(Path.Combine(scheda.Cartella(cartellaModelli), f)).Length;
+        righe.Children.Add(Mainframe.Riga("Stato", new TextBlock
+        {
+            Text = presente ? "installato · " + scheda.NomeCartella + " · " + CatalogoModelli.Peso(peso) : "non installato",
+            FontFamily = Stile.Testo,
+            FontSize = 15,
+            Foreground = presente ? Mainframe.CianoP : Stile.Inchiostro2,
+            TextWrapping = TextWrapping.Wrap
+        }));
+        righe.Children.Add(Mainframe.Riga("Da", new TextBlock
+        {
+            Text = "huggingface.co/" + scheda.Repo,
+            FontFamily = Stile.Testo,
+            FontSize = 15,
+            Foreground = Stile.Inchiostro2,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        }, "Licenza CC-BY-4.0 (NVIDIA). Gira sulla CPU con sherpa-onnx: la scheda video resta ai modelli LFM3."));
+        var avanzamento = Mainframe.Nota("");
+        var tasti = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        if (!presente)
+        {
+            var scarica = Mainframe.Tasto("Scarica");
+            scarica.Click += async (_, _) => await ScaricaFissa(scheda, cartellaModelli, scarica, avanzamento);
+            tasti.Children.Add(scarica);
+        }
+        else
+        {
+            var elimina = Mainframe.Tasto("Elimina", pericolo: true);
+            elimina.Click += async (_, _) => await EliminaFissa(scheda, cartellaModelli);
+            tasti.Children.Add(elimina);
+            var cartella = Mainframe.Tasto("Apri la sua cartella");
+            cartella.Click += (_, _) => Apri(scheda.Cartella(cartellaModelli));
+            tasti.Children.Add(cartella);
+        }
+        righe.Children.Add(tasti);
+        righe.Children.Add(avanzamento);
+        return sezione;
+    }
+
+    async Task ScaricaFissa(SchedaFissa scheda, string cartellaModelli, Button tasto, TextBlock avanzamento)
+    {
+        if (_download is not null)
+        {
+            if (ReferenceEquals(tasto.Tag, "in corso")) { _download.Cancel(); avanzamento.Text = "Annullo…"; }
+            else _esito.Text = "Sto già scaricando un altro modello: aspetta che finisca.";
+            return;
+        }
+        _download = new CancellationTokenSource();
+        var ct = _download.Token;
+        tasto.Tag = "in corso";
+        tasto.Content = "Annulla";
+        try
+        {
+            using var scaricatore = new ScaricatoreModelli();
+            avanzamento.Text = "Chiedo a Hugging Face quali file ci sono…";
+            var scelta = await scaricatore.Prepara(scheda, ct);
+            if (scelta is null)
+            {
+                avanzamento.Text = "Questo fallo tu: in " + scheda.Repo + " manca uno dei file che servono (" + string.Join(", ", scheda.File) + "), o non ha l'impronta.";
+                return;
+            }
+            var domanda = "Scarico " + scheda.Nome + " da huggingface.co/" + scheda.Repo + ":\n\n"
+                + string.Join("\n", scelta.File.Select(f => "• " + f.Percorso + " (" + CatalogoModelli.Peso(f.Byte) + ")"))
+                + "\n\nTotale " + CatalogoModelli.Peso(scelta.Totale) + ", revisione " + scelta.Revisione[..7] + ".\nVa in " + scheda.Cartella(cartellaModelli) + ".\n\nProcedo?";
+            if (MessageBox.Show(this, domanda, "Liquidino · Scarica", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            {
+                avanzamento.Text = "Va bene, non scarico niente.";
+                return;
+            }
+            _ponte.Registro.Scrivi("modelli", "scarico " + scheda.Nome + " (" + CatalogoModelli.Peso(scelta.Totale) + ")", "in corso");
+            var progresso = new Progress<Avanzamento>(a => avanzamento.Text = a.File + " · " + CatalogoModelli.Peso(a.Fatti) + " di " + CatalogoModelli.Peso(a.Totale)
+                + (a.Totale > 0 ? " · " + (int)(a.Fatti * 100 / a.Totale) + "%" : ""));
+            await scaricatore.Scarica(scelta, cartellaModelli, progresso, ct);
+            _ponte.Registro.Scrivi("modelli", "installato " + scheda.Nome, "ok");
+            _esito.Text = scheda.Nome + " è installato e controllato. Ora puoi accendere le Orecchie (👂) e registrare la parola nel Mainframe.";
+            Riempi();
+        }
+        catch (OperationCanceledException)
+        {
+            avanzamento.Text = "Annullato. Il file a metà è stato tolto.";
+            _ponte.Registro.Scrivi("modelli", "download di " + scheda.Nome + " annullato", "annullato");
+        }
+        catch (Exception e)
+        {
+            avanzamento.Text = "Questo fallo tu: non sono riuscito a scaricarlo. " + e.Message;
+            _ponte.Registro.SegnaErrore("download " + scheda.Nome + ": " + e.Message);
+        }
+        finally
+        {
+            _download?.Dispose();
+            _download = null;
+            tasto.Tag = null;
+            if (tasto.IsLoaded) tasto.Content = "Scarica";
+        }
+    }
+
+    async Task EliminaFissa(SchedaFissa scheda, string cartellaModelli)
+    {
+        var cartella = scheda.Cartella(cartellaModelli);
+        if (!Percorsi.StaDentro(cartellaModelli, cartella)) return;
+        var domanda = "Elimino " + scheda.Nome + "?\n\n" + string.Join("\n", scheda.File.Select(f => "• " + f))
+            + "\n\nLe Orecchie si spengono. I file vanno nel Cestino di Windows: se cambi idea li ripristini da lì.";
+        if (MessageBox.Show(this, domanda, "Liquidino · Elimina", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        try
+        {
+            _esito.Text = "Spengo le Orecchie e libero Parakeet…";
+            // Parakeet tiene aperti i file: prima si chiude, poi si spostano.
+            var eranoAccese = _ponte.Udito.Accese;
+            await Task.Run(() => _ponte.Udito.Dispose());
+            if (eranoAccese)
+            {
+                _ponte.Impostazioni.OrecchieAccese = false;
+                _ponte.Impostazioni.Salva();
+            }
+            await Task.Run(() =>
+            {
+                foreach (var f in scheda.File.Select(f => Path.Combine(cartella, f)))
+                    if (File.Exists(f) && Percorsi.StaDentro(cartella, f))
+                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(f, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                if (Directory.Exists(cartella) && !Directory.EnumerateFileSystemEntries(cartella).Any()) Directory.Delete(cartella);
+            });
+            _ponte.Registro.Scrivi("modelli", "eliminato " + scheda.Nome + " (nel Cestino)", "ok");
+            _esito.Text = scheda.Nome + " è nel Cestino di Windows. Le Orecchie restano spente finché non lo riscarichi.";
+            Riempi();
+        }
+        catch (Exception e)
+        {
+            _esito.Text = "Questo fallo tu: non sono riuscito a eliminarlo. " + e.Message;
+            _ponte.Registro.SegnaErrore("elimina " + scheda.Nome + ": " + e.Message);
+        }
     }
 
     Border Scheda(SchedaCatalogo scheda, SchedaModello? installato, string cartellaModelli)

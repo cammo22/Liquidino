@@ -19,18 +19,20 @@ Se manca un modello, Liquidino lo dice. Per scaricarlo c'è la pagina **Modelli*
 - Il pannello del mondo si sfoglia: cartella, ricerca (anche dentro i file), icone grandi, anteprima, 👍 e 👎. Con 👎 un pensiero si rifà, dicendogli in chat cosa cambiare.
 - d1 sceglie l'azione: rispondi, che ore sono, crea nota, ricorda, dimentica, mostra le creazioni, dormi. Per chiacchierare risponde subito. Chiede conferma, coi pulsanti sul fumetto, solo se deve scrivere, ricordare o dimenticare e non è sicuro.
 - **Le mani sul PC**, solo col tasto **Permesso** acceso: apre un programma del menu Start dopo il tuo «sì», apre Documenti, Download, Immagini, Musica, Video e Desktop, alza e abbassa il volume, mette in pausa la musica, guarda lo schermo. Non clicca, non scrive al posto tuo, non chiude e non installa niente. **STOP** ferma tutto e scarica i modelli.
+- **Le Orecchie** (👂): lo chiami «babbasone» e ti risponde, senza cliccare. Parakeet v3 trascrive sulla CPU, anche in italiano, e la parola si tara sulle tue registrazioni. Sente anche l'audio del PC (tranne la sua voce) e lo tiene in mente qualche minuto, senza salvarlo. Quello che sente dal PC non sono ordini.
+- **Chiamata su Discord** (📞): sente Discord a parte; chi lo chiama per nome riceve una risposta a voce, ma le mani le comandi solo tu. Con VB-CABLE la sua voce va anche nel tuo microfono, così gli altri lo sentono.
 - La chat usa Omni, se c'è, altrimenti LFM3-1.7B. La voce è il testo letto da `/tts` in italiano; se Omni non c'è, le voci italiane di Windows. Il ragionamento degli strumenti è spento.
 - Il regista tiene accesi al massimo due modelli e li scarica quando non servono. Di notte (dalle 23 alle 7) dorme e scrive il diario della giornata.
 - Ogni ora, se non lo spegni, lascia un pensiero in `mondo/idee`. Nelle prime due settimane è un saluto. «Un pensiero adesso» non ti fa aspettare l'ora.
 - Memoria in `mondo/memoria/cosa-so-di-te.md`. Si cancella a mano o con «dimentica». Il registro non conserva le tue frasi.
 - Prompt e catalogo, da leggere e modificare (poi riavvia): `%LOCALAPPDATA%\Liquidino-dati\prompt\sistema.md` e `catalogo\azioni.json`. Le regole di sicurezza stanno nel programma e valgono anche se li cambi.
-- Impostazioni (il Mainframe): pagina **Modelli**, cartella del motore, carattere, voce, «Prova il contesto sul serio», «Togli internet a llama-server», «Prova la voce», «Copia dettagli errore».
+- Impostazioni (il Mainframe): pagina **Modelli**, Orecchie (parola, registrazioni, microfono, voce nel microfono), cartella del motore, carattere, voce, «Prova il contesto sul serio», «Togli internet a llama-server», «Prova la voce», «Copia dettagli errore».
 
 Trascina un'immagine sull'avatar: se c'è Omni (o VL) la guarda. Un altro tipo di file: te lo dice e non lo tocca.
 
 ## Cosa non fa ancora
 
-La parola «Ehi Liquidino» non è addestrata. Non usa il mouse né la tastiera. Non si evolve da solo. L'elenco, con quanto manca, è in [ROADMAP.md](ROADMAP.md).
+Non usa il mouse né la tastiera. Non si evolve da solo. L'elenco, con quanto manca, è in [ROADMAP.md](ROADMAP.md).
 
 ## Da dove viene l'avatar
 

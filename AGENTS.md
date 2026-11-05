@@ -1,6 +1,6 @@
 # Istruzioni per chi lavora su Liquidino (persone e agenti)
 
-Liquidino è un compagno da desktop per Windows, in italiano, con modelli LFM3 in locale. Uso personale. Rete solo per il controllo aggiornamenti.
+Liquidino è un compagno da desktop per Windows, in italiano, con modelli LFM3 in locale. Uso personale. Rete solo per il controllo aggiornamenti e per i modelli che scarichi tu dalla pagina Modelli.
 
 ## Leggi prima di cambiare qualcosa
 

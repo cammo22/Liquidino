@@ -11,8 +11,27 @@ public sealed record SchedaCatalogo(RuoloModello Ruolo, string Nome, string APer
     public string Cartella(string cartellaModelli) => Path.Combine(cartellaModelli, Nome);
 }
 
-/// <summary>Un file di un repository, come lo descrive Hugging Face: percorso, peso e impronta SHA-256.</summary>
-public sealed record FileRepo(string Percorso, long Byte, string? Sha256);
+/// <summary>
+/// Un file di un repository, come lo descrive Hugging Face: percorso, peso e impronta.
+/// I file grandi (LFS) hanno lo SHA-256; quelli piccoli solo l'impronta git (SHA-1 del blob).
+/// </summary>
+public sealed record FileRepo(string Percorso, long Byte, string? Sha256, string? ShaGit = null)
+{
+    public bool HaImpronta => Sha256 is not null || ShaGit is not null;
+}
+
+/// <summary>Un modello fatto di file fissi (per esempio Parakeet: encoder, decoder, joiner e tokens), tutti nella sua cartella.</summary>
+public sealed record SchedaFissa(string Nome, string APerCosa, string Repo, string NomeCartella, IReadOnlyList<string> File)
+{
+    public string Cartella(string cartellaModelli) => Path.Combine(cartellaModelli, NomeCartella);
+    public bool Presente(string cartellaModelli) => File.All(f => new FileInfo(Path.Combine(Cartella(cartellaModelli), f)) is { Exists: true, Length: > 0 });
+}
+
+/// <summary>I file di un modello fisso alla revisione scelta, con il loro peso e la loro impronta.</summary>
+public sealed record SceltaFissa(SchedaFissa Scheda, string Revisione, IReadOnlyList<FileRepo> File)
+{
+    public long Totale => File.Sum(f => f.Byte);
+}
 
 /// <summary>Cosa si scarica per un modello: i pesi, il proiettore per vedere (se c'è) e la revisione esatta.</summary>
 public sealed record SceltaDownload(SchedaCatalogo Scheda, string Revisione, FileRepo Pesi, FileRepo? Proiettore)
@@ -115,13 +134,16 @@ public static class CatalogoModelli
             var percorso = e.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
             long size = e.TryGetProperty("size", out var s) && s.TryGetInt64(out var n) ? n : 0;
             string? sha = null;
+            string? git = null;
             if (e.TryGetProperty("lfs", out var lfs) && lfs.ValueKind == JsonValueKind.Object)
             {
                 if (lfs.TryGetProperty("oid", out var oid)) sha = oid.GetString();
                 if (lfs.TryGetProperty("size", out var ls) && ls.TryGetInt64(out var lsize)) size = lsize;
             }
+            else if (e.TryGetProperty("oid", out var blob)) git = blob.GetString();
             if (sha is not null && !EImpronta(sha)) sha = null;
-            if (percorso.Length > 0) lista.Add(new FileRepo(percorso, size, sha?.ToLowerInvariant()));
+            if (git is not null && !(git.Length == 40 && git.All(Uri.IsHexDigit))) git = null;
+            if (percorso.Length > 0) lista.Add(new FileRepo(percorso, size, sha?.ToLowerInvariant(), git?.ToLowerInvariant()));
         }
         return lista;
     }
@@ -142,6 +164,19 @@ public static class CatalogoModelli
 
     public static string IndirizzoFile(string repo, string revisione, string percorso) =>
         Sito + repo + "/resolve/" + revisione + "/" + string.Join('/', percorso.Split('/').Select(Uri.EscapeDataString));
+
+    /// <summary>I file fissi alla revisione: null se ne manca uno o se uno non ha l'impronta.</summary>
+    public static SceltaFissa? ScegliFissi(SchedaFissa scheda, string revisione, IReadOnlyList<FileRepo> file)
+    {
+        var scelti = new List<FileRepo>();
+        foreach (var nome in scheda.File)
+        {
+            var f = file.FirstOrDefault(x => x.Percorso == nome);
+            if (f is null || !f.HaImpronta || f.Byte <= 0) return null;
+            scelti.Add(f);
+        }
+        return new SceltaFissa(scheda, revisione, scelti);
+    }
 
     /// <summary>I file di un modello installato: pesi e proiettore. Si cancellano solo se stanno dentro la cartella dei modelli.</summary>
     public static IReadOnlyList<string> FileDa(SchedaModello installato, string cartellaModelli)
@@ -188,15 +223,48 @@ public sealed class ScaricatoreModelli : IDisposable
         return CatalogoModelli.Scegli(scheda, revisione, CatalogoModelli.LeggiElenco(elenco));
     }
 
+    /// <summary>Come Prepara, per un modello fatto di file fissi. Null se un file manca o non ha impronta.</summary>
+    public async Task<SceltaFissa?> Prepara(SchedaFissa scheda, CancellationToken ct)
+    {
+        using var tempo = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        tempo.CancelAfter(TimeSpan.FromSeconds(30));
+        var info = await _http.GetStringAsync(CatalogoModelli.Sito + "api/models/" + scheda.Repo, tempo.Token).ConfigureAwait(false);
+        var revisione = CatalogoModelli.LeggiRevisione(info) ?? throw new InvalidOperationException("Hugging Face non dice la revisione di " + scheda.Repo + ".");
+        var elenco = await _http.GetStringAsync(CatalogoModelli.Sito + "api/models/" + scheda.Repo + "/tree/" + revisione + "?recursive=true", tempo.Token).ConfigureAwait(false);
+        return CatalogoModelli.ScegliFissi(scheda, revisione, CatalogoModelli.LeggiElenco(elenco));
+    }
+
+    /// <summary>Scarica i file fissi nella cartella del modello, ognuno controllato con la sua impronta.</summary>
+    public async Task<IReadOnlyList<string>> Scarica(SceltaFissa scelta, string cartellaModelli, IProgress<Avanzamento>? avanzamento, CancellationToken ct)
+    {
+        var cartella = scelta.Scheda.Cartella(cartellaModelli);
+        if (!Percorsi.StaDentro(cartellaModelli, cartella)) throw new InvalidOperationException("La cartella del modello uscirebbe da quella dei modelli.");
+        Directory.CreateDirectory(cartella);
+        ControllaSpazio(cartella, scelta.Totale);
+        var salvati = new List<string>();
+        foreach (var f in scelta.File)
+        {
+            var destinazione = Path.Combine(cartella, Path.GetFileName(f.Percorso));
+            if (!Percorsi.StaDentro(cartella, destinazione)) throw new InvalidOperationException("Il file " + f.Percorso + " uscirebbe dalla cartella del modello.");
+            salvati.Add(await UnFile(scelta.Scheda.Repo, scelta.Revisione, f, destinazione, avanzamento, ct).ConfigureAwait(false));
+        }
+        return salvati;
+    }
+
+    static void ControllaSpazio(string cartella, long totale)
+    {
+        var libero = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(cartella))!).AvailableFreeSpace;
+        if (libero < totale + 512L * 1024 * 1024)
+            throw new InvalidOperationException("sul disco servono " + CatalogoModelli.Peso(totale) + " liberi più un margine, e ce ne sono " + CatalogoModelli.Peso(libero) + ".");
+    }
+
     /// <summary>Scarica pesi e proiettore nella cartella del modello. Ritorna i percorsi salvati.</summary>
     public async Task<IReadOnlyList<string>> Scarica(SceltaDownload scelta, string cartellaModelli, IProgress<Avanzamento>? avanzamento, CancellationToken ct)
     {
         var cartella = scelta.Scheda.Cartella(cartellaModelli);
         if (!Percorsi.StaDentro(cartellaModelli, cartella)) throw new InvalidOperationException("La cartella del modello uscirebbe da quella dei modelli.");
         Directory.CreateDirectory(cartella);
-        var libero = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(cartella))!).AvailableFreeSpace;
-        if (libero < scelta.Totale + 512L * 1024 * 1024)
-            throw new InvalidOperationException("sul disco servono " + CatalogoModelli.Peso(scelta.Totale) + " liberi più un margine, e ce ne sono " + CatalogoModelli.Peso(libero) + ".");
+        ControllaSpazio(cartella, scelta.Totale);
         var salvati = new List<string>();
         salvati.Add(await UnFile(scelta.Scheda.Repo, scelta.Revisione, scelta.Pesi, Path.Combine(cartella, scelta.NomePesi), avanzamento, ct).ConfigureAwait(false));
         if (scelta.Proiettore is not null && scelta.NomeProiettore is not null)
@@ -207,7 +275,7 @@ public sealed class ScaricatoreModelli : IDisposable
     async Task<string> UnFile(string repo, string revisione, FileRepo file, string destinazione, IProgress<Avanzamento>? avanzamento, CancellationToken ct)
     {
         if (!CatalogoModelli.PercorsoSicuro(file.Percorso)) throw new InvalidOperationException("Il percorso " + file.Percorso + " non è sicuro.");
-        if (file.Sha256 is null) throw new InvalidOperationException("Hugging Face non dice l'impronta di " + file.Percorso + ": non lo installo.");
+        if (!file.HaImpronta) throw new InvalidOperationException("Hugging Face non dice l'impronta di " + file.Percorso + ": non lo installo.");
         var parziale = destinazione + ".part";
         var nome = Path.GetFileName(destinazione);
         try
@@ -215,7 +283,9 @@ public sealed class ScaricatoreModelli : IDisposable
             using var risposta = await _http.GetAsync(CatalogoModelli.IndirizzoFile(repo, revisione, file.Percorso), HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             risposta.EnsureSuccessStatusCode();
             var totale = risposta.Content.Headers.ContentLength ?? file.Byte;
-            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            // Per i file LFS si controlla lo SHA-256; per quelli piccoli l'impronta git: SHA-1 di «blob <byte>\0» più il contenuto.
+            using var sha = IncrementalHash.CreateHash(file.Sha256 is not null ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA1);
+            if (file.Sha256 is null) sha.AppendData(System.Text.Encoding.ASCII.GetBytes("blob " + file.Byte + "\0"));
             await using (var sorgente = await risposta.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
             await using (var uscita = new FileStream(parziale, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20, useAsync: true))
             {
@@ -237,7 +307,7 @@ public sealed class ScaricatoreModelli : IDisposable
                 avanzamento?.Report(new Avanzamento(nome, fatti, totale));
             }
             var impronta = Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
-            if (impronta != file.Sha256)
+            if (impronta != (file.Sha256 ?? file.ShaGit))
                 throw new InvalidOperationException("l'impronta di " + nome + " non corrisponde a quella di Hugging Face: il file non è stato installato.");
             File.Move(parziale, destinazione, overwrite: true);
             return destinazione;

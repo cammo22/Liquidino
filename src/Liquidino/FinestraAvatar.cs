@@ -26,6 +26,8 @@ public sealed class FinestraAvatar : Window
     readonly Ellipse _led = new() { Width = 14, Height = 14, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 10, 8), IsHitTestVisible = false };
     readonly Button _parla;
     readonly Button _permesso;
+    readonly Button _orecchie;
+    readonly Button _chiamata;
     readonly Button _stop;
     readonly Button _dormi;
     readonly Button[] _tasti;
@@ -64,6 +66,8 @@ public sealed class FinestraAvatar : Window
 
         _parla = Stile.Icona("🎤", "Parla: un clic per ascoltare, un altro per mandare.");
         _permesso = Stile.Icona("🖥️", TestoPermesso(false));
+        _orecchie = Stile.Icona("👂", TestoOrecchie(false));
+        _chiamata = Stile.Icona("📞", TestoChiamata(false));
         _stop = Stile.Icona("⏹", "STOP: ferma il turno e scarica i modelli.", pericolo: true);
         var chat = Stile.Icona("💬", "Apri la chat.", principale: true);
         var creazioni = Stile.Icona("✨", "Apri le creazioni.");
@@ -74,6 +78,8 @@ public sealed class FinestraAvatar : Window
         var pensiero = Stile.Icona("💭", "Un pensiero adesso, nella sua cartella.");
         _parla.Click += (_, _) => _ponte.AlternaAscolto();
         _permesso.Click += (_, _) => _ponte.AlternaPermesso();
+        _orecchie.Click += async (_, _) => await _ponte.AlternaOrecchie();
+        _chiamata.Click += async (_, _) => await _ponte.AlternaChiamata();
         _stop.Click += (_, _) => _ponte.Stop();
         chat.Click += (_, _) => ApriCasa();
         creazioni.Click += (_, _) => ApriCasa().MostraCreazioni();
@@ -86,7 +92,7 @@ public sealed class FinestraAvatar : Window
         nota.Click += (_, _) => ChiediNota();
         ore.Click += async (_, _) => await _ponte.Messaggio("che ore sono");
         pensiero.Click += async (_, _) => await _ponte.PensieroAdesso();
-        _tasti = [_parla, chat, creazioni, _permesso, _stop, _dormi, impostazioni, nota, ore, pensiero];
+        _tasti = [_parla, _orecchie, chat, creazioni, _permesso, _chiamata, _stop, _dormi, impostazioni, nota, ore, pensiero];
 
         var zona = new Grid { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) };
         zona.Children.Add(_figura);
@@ -113,6 +119,7 @@ public sealed class FinestraAvatar : Window
         foreach (var b in _tasti) b.Opacity = 0;
         AggiornaPermesso();
         AggiornaParla();
+        AggiornaOrecchie();
 
         var sotto = new StackPanel();
         sotto.Children.Add(_servizi);
@@ -151,6 +158,7 @@ public sealed class FinestraAvatar : Window
 
         ponte.StatoCambiato += s => SulFilo(() => { ApplicaStato(s); AggiornaDormi(); });
         ponte.PermessoCambiato += () => SulFilo(AggiornaPermesso);
+        ponte.OrecchieCambiate += () => SulFilo(AggiornaOrecchie);
         ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
         ponte.Pensiero += testo => SulFilo(() => MostraBolla(testo));
         ponte.Annuncio += testo => SulFilo(() => MostraBolla(testo));
@@ -377,6 +385,27 @@ public sealed class FinestraAvatar : Window
         AggiornaServizi();
     }
 
+    void AggiornaOrecchie()
+    {
+        var accese = _ponte.Udito.Accese;
+        var chiamata = _ponte.Udito.InChiamata;
+        _orecchie.BorderBrush = accese ? Stile.VerdeP : Stile.Pennello("#3a3648");
+        _orecchie.Foreground = accese ? Stile.VerdeP : Stile.Inchiostro;
+        _orecchie.ToolTip = TestoOrecchie(accese);
+        _chiamata.BorderBrush = chiamata ? Stile.CianoP : Stile.Pennello("#3a3648");
+        _chiamata.Foreground = chiamata ? Stile.CianoP : Stile.Inchiostro;
+        _chiamata.ToolTip = TestoChiamata(chiamata);
+        AggiornaServizi();
+    }
+
+    string TestoOrecchie(bool accese) => accese
+        ? "Orecchie accese: mi chiami «" + _ponte.Impostazioni.ParolaSveglia + "» e ti rispondo. Sento anche l'audio del PC, senza la mia voce. Un clic per spegnerle."
+        : "Orecchie spente: non sento niente. Un clic per accenderle (serve Parakeet, dalla pagina Modelli).";
+
+    static string TestoChiamata(bool accesa) => accesa
+        ? "In chiamata: sento Discord a parte e, se l'hai acceso, la mia voce va nel tuo microfono (VB-CABLE). Un clic per uscire."
+        : "Modalità chiamata: entra in Discord, poi un clic qui. Chi mi chiama per nome riceve una risposta a voce, ma le mani le comandi solo tu.";
+
     static string TestoPermesso(bool acceso) => acceso
         ? "Permesso del PC acceso: apro un programma dopo il tuo sì, apro le cartelle, cambio il volume e guardo lo schermo. Non clicco e non scrivo. Un clic per spegnerlo."
         : "Permesso del PC spento: non tocco niente fuori dal mio mondo. Un clic per accenderlo.";
@@ -384,7 +413,7 @@ public sealed class FinestraAvatar : Window
     void AggiornaServizi()
     {
         var accesi = _ponte.Regista.Accesi;
-        Accendi(_chipAscolto, _ponte.StaAscoltando || _ponte.Stato == StatoCompagno.Ascolta);
+        Accendi(_chipAscolto, _ponte.StaAscoltando || _ponte.Stato == StatoCompagno.Ascolta || _ponte.Udito.Accese);
         Accendi(_chipD1, accesi.Contains(RuoloModello.D1));
         Accendi(_chipVoce, accesi.Contains(RuoloModello.Omni) || _ponte.Stato == StatoCompagno.Parla);
         Accendi(_chipMani, accesi.Contains(RuoloModello.Mani));
@@ -501,6 +530,8 @@ public sealed class FinestraAvatar : Window
         Voce("Parla", () => _ponte.AlternaAscolto());
         Voce("Chat", () => ApriCasa());
         Voce("Creazioni", () => ApriCasa().MostraCreazioni());
+        Voce(_ponte.Udito.Accese ? "Orecchie sì" : "Orecchie", () => _ = _ponte.AlternaOrecchie());
+        Voce(_ponte.Udito.InChiamata ? "Esci dalla chiamata" : "Chiamata", () => _ = _ponte.AlternaChiamata());
         Voce(_ponte.Impostazioni.PermessoPc ? "Permesso sì" : "Permesso", () => _ponte.AlternaPermesso());
         Voce("STOP", () => _ponte.Stop());
         Voce(_ponte.Stato == StatoCompagno.Dorme ? "Sveglia" : "Dormi", () =>

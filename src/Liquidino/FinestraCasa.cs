@@ -257,7 +257,7 @@ public sealed class FinestraCasa : Window
         Loaded += (_, _) => SistemaPosizione();
         RiempiMondo();
         AggiornaStato();
-        var orecchio = OrecchioLeggero.Stato();
+        var orecchio = OrecchioLeggero.Stato(ponte.Impostazioni.ParolaSveglia, ponte.Regista.Rilevazione.CartellaModelli);
         Aggiungi("Liquidino", "Ciao" + (string.IsNullOrWhiteSpace(ponte.Impostazioni.NomeUtente) ? "" : " " + ponte.Impostazioni.NomeUtente) + ". " + orecchio.Messaggio + " " + ponte.Impostazioni.FraseContesto, false);
     }
 

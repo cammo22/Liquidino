@@ -160,7 +160,14 @@ public class ProvaCatalogoHf
             Assert.True(scelta is not null, string.Join("\n", righe));
             Assert.Equal(scheda.Ruolo, RilevatoreModelli.RuoloDi(scelta!.NomePesi));
         }
+        SceltaFissa? parakeet = null;
+        string? errore = null;
+        try { parakeet = await scaricatore.Prepara(CatalogoOrecchio.Parakeet, CancellationToken.None); }
+        catch (Exception e) { errore = e.GetType().Name + ": " + e.Message; }
+        righe.Add(CatalogoOrecchio.Parakeet.Repo + " -> " + (parakeet is null ? "NIENTE (" + (errore ?? "manca un file o la sua impronta") + ")"
+            : string.Join(", ", parakeet.File.Select(f => f.Percorso + " " + CatalogoModelli.Peso(f.Byte) + (f.Sha256 is null ? " git" : " sha256"))) + " @ " + parakeet.Revisione[..7]));
         var esito = Environment.GetEnvironmentVariable("LIQUIDINO_HF_ESITO");
         if (!string.IsNullOrWhiteSpace(esito)) File.WriteAllLines(esito, righe);
+        Assert.True(parakeet is not null, string.Join("\n", righe));
     }
 }

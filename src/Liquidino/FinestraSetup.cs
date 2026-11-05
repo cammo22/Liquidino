@@ -54,7 +54,7 @@ public sealed class FinestraSetup : Window
         voci.Children.Add(_lei);
         voci.Children.Add(_lui);
         pila.Children.Add(voci);
-        pila.Children.Add(Stile.Riga(OrecchioLeggero.Stato().Messaggio, secondario: true));
+        pila.Children.Add(Stile.Riga(OrecchioLeggero.Stato(_imp.ParolaSveglia, RilevatoreModelli.Cerca(_imp.CartellaMotore).CartellaModelli).Messaggio, secondario: true));
         var parti = Stile.Bottone("Si parte", principale: true);
         parti.HorizontalAlignment = HorizontalAlignment.Left;
         parti.Margin = new Thickness(0, 16, 0, 0);

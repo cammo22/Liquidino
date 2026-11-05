@@ -18,6 +18,7 @@ public sealed class Ponte
     public Microfono Microfono { get; } = new();
     public ManiWindows Mani { get; } = new();
     public LettoreVoce Lettore { get; } = new();
+    public OrecchieWindows Udito { get; }
     public StatoCompagno Stato { get; private set; } = StatoCompagno.Dorme;
     public string? EtichettaAggiornamento { get; private set; }
 
@@ -29,6 +30,7 @@ public sealed class Ponte
     public event Action<byte[]>? VocePronta;
     public event Action<string>? Annuncio;
     public event Action<EsitoDialogo>? Risposto;
+    public event Action? OrecchieCambiate;
     public bool StaAscoltando { get; private set; }
     public FinestraCasa? Casa { get; set; }
     public ComandiLocali Comandi { get; } = new();
@@ -47,9 +49,14 @@ public sealed class Ponte
         Regista = new Regista(impostazioni, Registro);
         Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()), Mani);
         Ciclo = new CicloAutonomo(impostazioni, Mondo, Registro, Regista);
+        Udito = new OrecchieWindows(impostazioni, () => Regista.Rilevazione.CartellaModelli, Registro);
+        Udito.Cambiate += () => SulFiloUi(() => OrecchieCambiate?.Invoke());
+        Udito.Decisione += (d, fonte, chi) => SulFiloUi(() => _ = DaOrecchie(d, chi));
+        Dialogo.Udito = () => Udito.Accese ? Udito.Logica.Registro.Testo(DateTimeOffset.Now) : null;
         Lettore.Finito += () =>
         {
             Microfono.SilenziaFino(DateTime.UtcNow.AddMilliseconds(500));
+            Udito.SilenziaFino(DateTime.UtcNow.AddMilliseconds(700));
             if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
         };
     }
@@ -71,6 +78,7 @@ public sealed class Ponte
             catch (Exception e) { Registro.SegnaErrore("ciclo: " + e.Message); }
         };
         if (Impostazioni.CicloAutonomo) _ciclo.Start();
+        if (Impostazioni.OrecchieAccese) _ = AccendiOrecchie(annuncia: false);
 
         _notte = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _notte.Tick += async (_, _) =>
@@ -109,6 +117,7 @@ public sealed class Ponte
         {
             try { if (Microfono.StaRegistrando) Microfono.Ferma(); } catch { /* il microfono può essere già chiuso */ }
             try { Lettore.Ferma(); } catch { /* il lettore può essere già chiuso */ }
+            try { Udito.Cavo?.Zitto(); } catch { /* il cavo può essere già chiuso */ }
         });
         StaAscoltando = false;
         SulFiloUi(() => AscoltoCambiato?.Invoke());
@@ -121,6 +130,13 @@ public sealed class Ponte
     public void Stop()
     {
         Annulla();
+        // STOP ferma tutto, anche le orecchie: si riaccendono solo col tasto 👂.
+        if (Udito.Accese)
+        {
+            Udito.Spegni();
+            Impostazioni.OrecchieAccese = false;
+            _ = Task.Run(() => Impostazioni.Salva());
+        }
         Dialogo.DimenticaSessione();
         ImpostaStato(StatoCompagno.Dorme);
         _ = Task.Run(() => Registro.Scrivi("stop", "STOP premuto: modelli scaricati", "ok"));
@@ -138,6 +154,103 @@ public sealed class Ponte
             Registro.Scrivi("permesso", acceso ? "permesso del PC acceso" : "permesso del PC spento", "ok");
         });
         PermessoCambiato?.Invoke();
+    }
+
+    /// <summary>Il tasto 👂: accende o spegne le Orecchie.</summary>
+    public async Task AlternaOrecchie()
+    {
+        SegnaGesto();
+        if (Udito.Accese)
+        {
+            Udito.Spegni();
+            Impostazioni.OrecchieAccese = false;
+            _ = Task.Run(() => Impostazioni.Salva());
+            Annuncia("Orecchie spente: non sento niente, e quello che avevo sentito l'ho dimenticato.");
+            return;
+        }
+        await AccendiOrecchie(annuncia: true);
+    }
+
+    async Task AccendiOrecchie(bool annuncia)
+    {
+        string frase;
+        try { frase = await Udito.Accendi(); }
+        catch (Exception e)
+        {
+            Registro.SegnaErrore("orecchie: " + e.Message);
+            frase = Testo.FalloTu("le Orecchie non si accendono: " + e.Message);
+        }
+        Impostazioni.OrecchieAccese = Udito.Accese;
+        _ = Task.Run(() => Impostazioni.Salva());
+        if (annuncia || !Udito.Accese) Annuncia(frase);
+        SulFiloUi(() => OrecchieCambiate?.Invoke());
+    }
+
+    /// <summary>Il tasto 📞: entra o esce dalla modalità chiamata.</summary>
+    public async Task AlternaChiamata()
+    {
+        SegnaGesto();
+        string frase;
+        try { frase = Udito.InChiamata ? await Udito.ChiudiChiamata() : await Udito.ApriChiamata(); }
+        catch (Exception e)
+        {
+            Registro.SegnaErrore("chiamata: " + e.Message);
+            frase = Testo.FalloTu("la modalità chiamata non parte: " + e.Message);
+        }
+        Impostazioni.OrecchieAccese = Udito.Accese;
+        Annuncia(frase);
+        SulFiloUi(() => OrecchieCambiate?.Invoke());
+    }
+
+    DispatcherTimer? _dimmi;
+
+    /// <summary>Quello che le orecchie hanno deciso: un comando tuo, il nome da solo, o qualcuno in chiamata.</summary>
+    async Task DaOrecchie(DecisioneOrecchio d, string chi)
+    {
+        try
+        {
+            switch (d.Cosa)
+            {
+                case CosaFare.Svegliato:
+                    if (Stato is StatoCompagno.Pensa or StatoCompagno.Parla || StaAscoltando) return;
+                    SegnaGesto();
+                    ImpostaStato(StatoCompagno.Ascolta);
+                    Annuncia("Dimmi.");
+                    _dimmi?.Stop();
+                    _dimmi = new DispatcherTimer { Interval = Udito.Logica.AttesaDopoNome + TimeSpan.FromSeconds(1) };
+                    _dimmi.Tick += (_, _) =>
+                    {
+                        _dimmi?.Stop();
+                        if (Stato == StatoCompagno.Ascolta && !StaAscoltando) ImpostaStato(StatoCompagno.Sveglio);
+                    };
+                    _dimmi.Start();
+                    break;
+                case CosaFare.Comando:
+                    // Mentre pensa a un'altra cosa non si accavalla: la frase si perde e lo dice il registro.
+                    if (Stato == StatoCompagno.Pensa)
+                    {
+                        Registro.Scrivi("orecchie", "comando a voce mentre pensavo: ignorato", "rifiutato", "orecchie");
+                        return;
+                    }
+                    _dimmi?.Stop();
+                    Registro.Scrivi("orecchie", "comando a voce: " + d.Testo.Length + " caratteri", "ok", "orecchie");
+                    await Messaggio(d.Testo, sentito: d.Testo);
+                    break;
+                case CosaFare.RispostaChiamata:
+                    if (Stato is StatoCompagno.Pensa or StatoCompagno.Parla) return;
+                    var ct = Token();
+                    ImpostaStato(StatoCompagno.Pensa);
+                    try
+                    {
+                        var esito = await Dialogo.RispondiInChiamata(chi, d.Testo, ct);
+                        if (esito.Testo.Length == 0) { ImpostaStato(StatoCompagno.Sveglio); return; }
+                        await Dopo(esito, ct);
+                    }
+                    catch (OperationCanceledException) { TurnoAnnullato(); }
+                    break;
+            }
+        }
+        catch (Exception e) { Registro.SegnaErrore("orecchie: " + e.Message); }
     }
 
     public void AlternaAscolto()
@@ -181,7 +294,7 @@ public sealed class Ponte
         }
     }
 
-    public async Task<EsitoDialogo> Messaggio(string testo)
+    public async Task<EsitoDialogo> Messaggio(string testo, string? sentito = null)
     {
         var ct = Token();
         SegnaGesto();
@@ -189,6 +302,8 @@ public sealed class Ponte
         try
         {
             var esito = await Dialogo.Messaggio(testo, ct);
+            // Detto a voce con le Orecchie: la frase compare in chat come tua e la risposta si legge ad alta voce.
+            if (sentito is not null) esito = esito with { Trascrizione = sentito, VuoiVoce = esito.Testo.Length > 0 };
             await Dopo(esito, ct);
             return esito;
         }
@@ -301,6 +416,8 @@ public sealed class Ponte
             var path = Path.Combine(Path.GetTempPath(), "liquidino-voce-" + Guid.NewGuid().ToString("N") + ".wav");
             await File.WriteAllBytesAsync(path, bytes, ct);
             Microfono.SilenziaFino(DateTime.UtcNow.AddMinutes(2));
+            Udito.SilenziaFino(DateTime.UtcNow.AddMinutes(2));
+            if (Udito.InChiamata) Udito.SuonaNelMicrofono(bytes);
             Lettore.Suona(path);
             suona = true;
         }
@@ -508,6 +625,7 @@ public sealed class Ponte
         _notte?.Stop();
         try { _cts.Cancel(); } catch { /* già annullato */ }
         try { Microfono.Dispose(); } catch { /* il microfono può essere già chiuso */ }
+        try { Udito.Dispose(); } catch { /* le orecchie possono essere già chiuse */ }
         try { Lettore.Dispose(); } catch { /* il lettore può essere già chiuso */ }
         try
         {
