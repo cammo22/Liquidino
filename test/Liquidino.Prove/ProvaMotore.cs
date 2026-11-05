@@ -36,18 +36,23 @@ public class ProvaMotore
         string Dettaglio(string? motivo)
         {
             var log = Path.Combine(dati, "motore", "server.log");
-            var coda = File.Exists(log) ? File.ReadAllText(log) : "(niente server.log)";
+            var coda = File.Exists(log) ? LeggiCondiviso(log) : "(niente server.log)";
             if (coda.Length > 2500) coda = coda[^2500..];
             var ini = Path.Combine(dati, "motore", "modelli.ini");
-            var preset = File.Exists(ini) ? File.ReadAllText(ini) : "(niente modelli.ini)";
+            var preset = File.Exists(ini) ? LeggiCondiviso(ini) : "(niente modelli.ini)";
             return (motivo ?? "senza dettaglio") + "\n" + regista.Riassunto() + "\n" + preset + "\n" + coda;
         }
         try
         {
-            Assert.True(regista.MotorePresente, Dettaglio(regista.Riassunto()));
-            Assert.True(regista.Presente(RuoloModello.Mani), Dettaglio(regista.Riassunto()));
+            // Il dettaglio si legge solo se la prova fallisce: server.log intanto si sta scrivendo.
+            void Verifica(bool vero, Func<string?> motivo)
+            {
+                if (!vero) Assert.Fail(Dettaglio(motivo()));
+            }
+            Verifica(regista.MotorePresente, regista.Riassunto);
+            Verifica(regista.Presente(RuoloModello.Mani), regista.Riassunto);
             var acceso = await regista.Assicura(new[] { RuoloModello.Mani }, tempo.Token);
-            Assert.True(acceso, Dettaglio(regista.UltimoErrore ?? "caricamento fallito senza dettaglio"));
+            Verifica(acceso, () => regista.UltimoErrore ?? "caricamento fallito senza dettaglio");
             Assert.Contains(RuoloModello.Mani, regista.Accesi);
 
             var risp = await regista.Completa(new RichiestaChat(
@@ -57,7 +62,7 @@ public class ProvaMotore
                 "Once upon a time",
                 null, null, null, null,
                 0.7, 32, true), tempo.Token);
-            Assert.False(string.IsNullOrWhiteSpace(risp?.Testo), Dettaglio("la chat è tornata vuota"));
+            Verifica(!string.IsNullOrWhiteSpace(risp?.Testo), () => "la chat è tornata vuota");
 
             // Prova di carico vera, in piccolo. Il GGUF della CI è addestrato su 128 token e llama-server
             // taglia lo slot a 128 anche se il preset dice 2048: ne chiediamo 100, cioè quasi tutto lo slot.
@@ -66,14 +71,14 @@ public class ProvaMotore
             File.WriteAllText(Path.Combine(radice, "esito-riempimento.txt"),
                 "token voluti: " + voluti + ", letti: " + (riempito.Token?.ToString() ?? "?") + ", slot su disco: " + (riempito.SlotSalvato?.ToString() ?? "?")
                 + ", errore: " + (riempito.Errore ?? "nessuno") + ", risposta per lo slot: " + (riempito.NotaSlot ?? "nessuna"));
-            Assert.True(ProvaContesto.Regge(voluti, riempito.Token) && riempito.Token <= 128,
-                Dettaglio("prova di carico: " + (riempito.Token?.ToString() ?? riempito.Errore)));
+            Verifica(ProvaContesto.Regge(voluti, riempito.Token) && riempito.Token <= 128,
+                () => "prova di carico: " + (riempito.Token?.ToString() ?? riempito.Errore));
 
             await regista.ScaricaTutto(tempo.Token);
             Assert.DoesNotContain(RuoloModello.Mani, regista.Accesi);
 
             var giornale = Directory.GetFiles(Percorsi.Registro(dati), "*.jsonl").Single();
-            var log = File.ReadAllText(giornale);
+            var log = LeggiCondiviso(giornale);
             Assert.Contains("chiedo il caricamento", log);
             Assert.Contains("caricato", log);
             Assert.Contains("scaricato", log);
@@ -83,4 +88,13 @@ public class ProvaMotore
             regista.UccidiSubito();
         }
     }
+
+    /// <summary>Legge un file che intanto si sta ancora scrivendo (il log di llama-server, copiato riga per riga).</summary>
+    static string LeggiCondiviso(string percorso)
+    {
+        using var flusso = new FileStream(percorso, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var lettore = new StreamReader(flusso);
+        return lettore.ReadToEnd();
+    }
+
 }
