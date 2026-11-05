@@ -19,7 +19,12 @@ public static class Percorsi
         return locale;
     }
 
-    public static string RadiceDati() => Path.Combine(CartellaLocale(), NomeDati);
+    static string? _radiceForzata;
+
+    /// <summary>Solo per la prova di avvio: tutti i dati in una cartella a parte, lontano da quelli veri.</summary>
+    public static void UsaRadice(string? radice) => _radiceForzata = string.IsNullOrWhiteSpace(radice) ? null : Path.GetFullPath(radice);
+
+    public static string RadiceDati() => _radiceForzata ?? Path.Combine(CartellaLocale(), NomeDati);
 
     /// <summary>Dove la 0.2.0 teneva i dati, cioè dentro la cartella che Velopack cancella.</summary>
     public static string RadiceVecchia() => Path.Combine(CartellaLocale(), NomeInstallazioneVecchia);

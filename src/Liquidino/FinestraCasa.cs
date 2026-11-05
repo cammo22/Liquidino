@@ -302,6 +302,23 @@ public sealed class FinestraCasa : Window
         }
     }
 
+    /// <summary>Per la prova di avvio: passa da tutte le viste del pannello del mondo.</summary>
+    internal void EsercitaPannello()
+    {
+        _iconeGrandi = true;
+        RiempiMondo();
+        if (_lista.Items.Count > 0) _lista.SelectedIndex = 0;
+        MostraAnteprima();
+        _cerca.Text = "prova";
+        RiempiMondo();
+        _cerca.Text = "";
+        _iconeGrandi = false;
+        RiempiMondo();
+        DiarioDiOggi();
+        if (!_testoAnteprima.Text.Contains("Diario", StringComparison.Ordinal))
+            throw new InvalidOperationException("l'anteprima del diario non si vede: " + _testoAnteprima.Text);
+    }
+
     public void MostraCreazioni()
     {
         Show();

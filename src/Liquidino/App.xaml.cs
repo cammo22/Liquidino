@@ -25,6 +25,13 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        var prova = Array.IndexOf(e.Args, ProvaAvvio.Argomento);
+        if (prova >= 0)
+        {
+            var cartella = prova + 1 < e.Args.Length ? e.Args[prova + 1] : Path.Combine(Path.GetTempPath(), "liquidino-prova-avvio");
+            ProvaAvvio.Avvia(this, cartella);
+            return;
+        }
         DispatcherUnhandledException += (_, ev) =>
         {
             try
@@ -92,6 +99,13 @@ public partial class App : System.Windows.Application
             imp.VersioneNovitaViste = Ponte.Versione;
             imp.Salva();
         }
+    }
+
+    /// <summary>Chiude senza chiedere: per la prova di avvio.</summary>
+    public void Termina(int codice)
+    {
+        InUscita = true;
+        Shutdown(codice);
     }
 
     public void Esci()

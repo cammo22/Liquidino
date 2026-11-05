@@ -50,5 +50,7 @@
     <Content Include="..\..\risorse\font\OFL-orbitron.txt" Link="licenze\OFL-orbitron.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\font\OFL-rajdhani.txt" Link="licenze\OFL-rajdhani.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\font\OFL-dseg.txt" Link="licenze\OFL-dseg.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="licenze\THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\LICENSE" Link="licenze\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

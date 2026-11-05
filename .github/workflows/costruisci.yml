@@ -37,15 +37,21 @@ jobs:
         shell: pwsh
         run: ./scripts/pacchetto.ps1
 
+      - name: Prova di avvio dell'app pubblicata
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./scripts/prova-avvio.ps1
+
       - name: Artefatto
         uses: actions/upload-artifact@v4
         with:
-          name: Liquidino-0.2.1
+          name: Liquidino
           path: |
             Releases/Liquidino-Setup.exe
             Releases/Liquidino-portatile.zip
             Releases/*.nupkg
             Releases/releases.win.json
+            Releases/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Release
