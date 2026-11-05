@@ -2,8 +2,11 @@ using System.Text;
 
 namespace Liquidino.Nucleo;
 
-/// <summary>Una prova di riempimento: quanti token il motore ha letto davvero, e se lo slot è finito su disco.</summary>
-public sealed record Riempimento(int? Token, bool? SlotSalvato, string? Errore);
+/// <summary>
+/// Una prova di riempimento: quanti token il motore ha letto davvero, e se lo slot è finito su disco.
+/// NotaSlot è la risposta del motore quando lo slot non si salva.
+/// </summary>
+public sealed record Riempimento(int? Token, bool? SlotSalvato, string? Errore, string? NotaSlot = null);
 
 public sealed record EsitoProvaContesto(bool Riuscita, int Contesto, int Token, bool? SlotSalvato, IReadOnlyList<string> Passi)
 {

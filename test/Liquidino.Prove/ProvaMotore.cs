@@ -64,7 +64,8 @@ public class ProvaMotore
             const int voluti = 100;
             var riempito = await regista.ProvaRiempimento(voluti, tempo.Token);
             File.WriteAllText(Path.Combine(radice, "esito-riempimento.txt"),
-                "token voluti: " + voluti + ", letti: " + (riempito.Token?.ToString() ?? "?") + ", slot su disco: " + (riempito.SlotSalvato?.ToString() ?? "?") + ", errore: " + (riempito.Errore ?? "nessuno"));
+                "token voluti: " + voluti + ", letti: " + (riempito.Token?.ToString() ?? "?") + ", slot su disco: " + (riempito.SlotSalvato?.ToString() ?? "?")
+                + ", errore: " + (riempito.Errore ?? "nessuno") + ", risposta per lo slot: " + (riempito.NotaSlot ?? "nessuna"));
             Assert.True(ProvaContesto.Regge(voluti, riempito.Token) && riempito.Token <= 128,
                 Dettaglio("prova di carico: " + (riempito.Token?.ToString() ?? riempito.Errore)));
 

@@ -97,16 +97,22 @@ public sealed class ClienteLlama : IDisposable
         await Posta("models/unload", new { model = id }, limite.Token).ConfigureAwait(false);
     }
 
-    public async Task SalvaSlot(string id, string file, CancellationToken ct, TimeSpan? tempo = null)
+    /// <summary>
+    /// Salva lo slot 0 del modello su disco. Il router sceglie il modello dal campo «model» del corpo,
+    /// quindi il nome va lì oltre che nell'indirizzo. Ritorna null se il motore dice ok, se no la sua risposta.
+    /// </summary>
+    public async Task<string?> SalvaSlot(string id, string file, CancellationToken ct, TimeSpan? tempo = null)
     {
         using var limite = Limite(ct, tempo ?? TempoScarico);
-        await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
+        var risp = await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { model = id, filename = file }, limite.Token).ConfigureAwait(false);
+        return risp.ok ? null : Taglia(risp.corpo);
     }
 
-    public async Task RipristinaSlot(string id, string file, CancellationToken ct)
+    public async Task<string?> RipristinaSlot(string id, string file, CancellationToken ct)
     {
         using var limite = Limite(ct, TempoScarico);
-        await Posta($"slots/0?action=restore&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
+        var risp = await Posta($"slots/0?action=restore&model={Uri.EscapeDataString(id)}", new { model = id, filename = file }, limite.Token).ConfigureAwait(false);
+        return risp.ok ? null : Taglia(risp.corpo);
     }
 
     public async Task<string?> StatoModello(string id, CancellationToken ct)

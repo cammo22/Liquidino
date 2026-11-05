@@ -242,8 +242,9 @@ public sealed class Regista : IRegista
             var letti = await Leggi(ProvaContesto.Riempitivo(caratteri), TimeSpan.FromMinutes(5)).ConfigureAwait(false);
             _registro.Scrivi("contesto", "prova di carico: voluti " + voluti + ", letti " + (letti?.ToString() ?? "?"), letti is null ? "errore" : "ok");
             bool? slot = null;
-            if (letti is not null) slot = await ProvaSlot(id, legati.Token).ConfigureAwait(false);
-            return new Riempimento(letti, slot, letti is null ? "il motore non ha detto quanti token ha letto" : null);
+            string? notaSlot = null;
+            if (letti is not null) (slot, notaSlot) = await ProvaSlot(id, legati.Token).ConfigureAwait(false);
+            return new Riempimento(letti, slot, letti is null ? "il motore non ha detto quanti token ha letto" : null, notaSlot);
         }
         catch (OperationCanceledException) when (!legati.IsCancellationRequested)
         {
@@ -257,21 +258,22 @@ public sealed class Regista : IRegista
         finally { _porta.Release(); }
     }
 
-    async Task<bool> ProvaSlot(string id, CancellationToken ct)
+    async Task<(bool Salvato, string? Nota)> ProvaSlot(string id, CancellationToken ct)
     {
         const string nome = "prova-contesto.bin";
         var file = Path.Combine(Percorsi.Slot(_radiceDati), nome);
         try
         {
             if (File.Exists(file)) File.Delete(file);
-            await _cliente!.SalvaSlot(id, nome, ct, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            var risposta = await _cliente!.SalvaSlot(id, nome, ct, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
             var salvato = File.Exists(file) && new FileInfo(file).Length > 0;
-            _registro.Scrivi("contesto", salvato ? "lo slot si salva su disco" : "lo slot non si è salvato su disco", salvato ? "ok" : "vuoto");
-            return salvato;
+            var nota = salvato ? null : risposta ?? "il motore ha detto ok, ma il file non c'è";
+            _registro.Scrivi("contesto", salvato ? "lo slot si salva su disco" : "lo slot non si è salvato su disco: " + nota, salvato ? "ok" : "vuoto");
+            return (salvato, nota);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return false; }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (false, "tempo scaduto"); }
         catch (OperationCanceledException) { throw; }
-        catch { return false; }
+        catch (Exception e) { return (false, e.Message); }
         finally
         {
             try { if (File.Exists(file)) File.Delete(file); } catch { /* si cancella la prossima volta */ }
