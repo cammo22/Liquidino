@@ -3,23 +3,20 @@ namespace Liquidino.Nucleo;
 public sealed record StatoOrecchio(bool Pronto, string Messaggio);
 
 /// <summary>
-/// Posto per l'orecchio leggero sulla CPU: Silero VAD (codice e modello MIT)
-/// e openWakeWord (codice Apache-2.0). La parola «Ehi Liquidino» va addestrata da noi:
-/// i modelli già fatti di openWakeWord sono inglesi e non commerciali, qui non si usano.
-/// Nel prototipo l'attivazione è il clic e il tasto. Quando i due file onnx ci saranno, questo dice che è pronto.
+/// Cosa dire delle orecchie: se Parakeet c'è, e se la parola è tarata sulla tua voce.
+/// Il rilevatore della voce non ha modelli: guarda l'energia del suono.
 /// </summary>
 public static class OrecchioLeggero
 {
-    public const string Parola = "Ehi Liquidino";
-
-    public static StatoOrecchio Stato(string? radiceDati = null)
+    public static StatoOrecchio Stato(string parola, string cartellaModelli, string? radiceDati = null)
     {
-        var dir = Percorsi.Orecchio(radiceDati);
-        var vad = Path.Combine(dir, "silero_vad.onnx");
-        var wake = Path.Combine(dir, "ehi-liquidino.onnx");
-        if (File.Exists(vad) && File.Exists(wake))
-            return new StatoOrecchio(true, "L'orecchio è pronto per «" + Parola + "».");
-        return new StatoOrecchio(false,
-            "La parola «" + Parola + "» non è ancora addestrata. Per ora svegliami con un clic, con «Parla» o con Ctrl+Spazio.");
+        parola = string.IsNullOrWhiteSpace(parola) ? ParolaSveglia.DiSerie : parola.Trim();
+        if (!CatalogoOrecchio.Parakeet.Presente(cartellaModelli))
+            return new StatoOrecchio(false,
+                "Per sentirmi chiamare «" + parola + "» mi serve Parakeet: lo scarichi dalla pagina Modelli. Intanto svegliami con un clic, con «Parla» o con Ctrl+Spazio.");
+        var tarata = ParolaSveglia.Carica(parola, radiceDati);
+        return new StatoOrecchio(true, tarata.Tarata
+            ? "Accendi le Orecchie (👂) e chiamami «" + parola + "»: la parola è tarata su " + tarata.Registrazioni + " tue registrazioni."
+            : "Accendi le Orecchie (👂) e chiamami «" + parola + "». Se registri la parola qualche volta (Mainframe → Orecchie), ti sento meglio.");
     }
 }

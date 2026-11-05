@@ -35,6 +35,18 @@ public sealed class ImpostazioniUtente
     public bool ContestoMisurato { get; set; }
     public string FraseContesto { get; set; } = "";
     public string VersioneNovitaViste { get; set; } = "";
+    /// <summary>La parola per svegliarlo con le Orecchie accese.</summary>
+    public string ParolaSveglia { get; set; } = Nucleo.ParolaSveglia.DiSerie;
+    /// <summary>Le Orecchie si riaccendono all'avvio se erano accese.</summary>
+    public bool OrecchieAccese { get; set; }
+    /// <summary>Con le Orecchie accese sente anche l'audio del PC (senza la sua voce).</summary>
+    public bool AscoltaPc { get; set; } = true;
+    /// <summary>Il microfono da usare; vuoto vuol dire quello predefinito di Windows.</summary>
+    public string Microfono { get; set; } = "";
+    /// <summary>In chiamata la sua voce va anche nel microfono, attraverso VB-CABLE. Spento finché non lo accendi tu.</summary>
+    public bool VoceNelMicrofono { get; set; }
+    /// <summary>Quanto forte si sente lui nel microfono, in percento (50-200).</summary>
+    public int VolumeVoceMicrofono { get; set; } = 100;
 
     [JsonIgnore]
     public string PercorsoFile { get; set; } = "";
@@ -99,6 +111,10 @@ public sealed class ImpostazioniUtente
         if (imp.Porta is < 1 or > 65535) imp.Porta = 8094;
         if (imp.CicloMinuti < 5) imp.CicloMinuti = 5;
         if (string.IsNullOrWhiteSpace(imp.CartellaMotore)) imp.CartellaMotore = Percorsi.CartellaProvaCammo;
+        imp.ParolaSveglia = string.IsNullOrWhiteSpace(imp.ParolaSveglia) ? Nucleo.ParolaSveglia.DiSerie : imp.ParolaSveglia.Trim();
+        if (imp.ParolaSveglia.Length > 40) imp.ParolaSveglia = imp.ParolaSveglia[..40];
+        imp.Microfono ??= "";
+        imp.VolumeVoceMicrofono = Math.Clamp(imp.VolumeVoceMicrofono, 50, 200);
         return imp;
     }
 

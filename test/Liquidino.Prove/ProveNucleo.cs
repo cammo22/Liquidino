@@ -248,9 +248,10 @@ public class ProveNucleo
     public void Pulisce_i_ragionamenti_e_l_orecchio_non_e_pronto()
     {
         Assert.Equal("Ciao.", Testo.PulisciRisposta("<think>piano</think>\nCiao."));
-        var stato = OrecchioLeggero.Stato(Temporanea());
+        var radice = Temporanea();
+        var stato = OrecchioLeggero.Stato("", Path.Combine(radice, "modelli"), radice);
         Assert.False(stato.Pronto);
-        Assert.Contains("Ehi Liquidino", stato.Messaggio);
+        Assert.Contains("«babbasone»", stato.Messaggio);
         Assert.Equal("0,60", Testo.FormatoVirgola(0.6));
     }
 

@@ -1,6 +1,6 @@
 # Aiuto per l'utente
 
-Guida rapida di Liquidino 0.4.0 e soluzioni ai problemi più comuni. C'è scritto solo quello che il programma fa davvero.
+Guida rapida di Liquidino 0.5.0 e soluzioni ai problemi più comuni. C'è scritto solo quello che il programma fa davvero.
 
 ## In breve
 
@@ -20,9 +20,9 @@ I modelli **non** sono nell'installer. Si cercano in `C:\Users\cammo\LiquidinoPr
 ## Il tuo compagno
 
 - **L'avatar** è trasparente e sempre davanti. Lo sposti col mouse, la rotella lo ingrandisce. Stati: dorme, ascolta, pensa, parla.
-- **I tasti** compaiono quando passi sopra l'avatar col mouse: 🎤 Parla, 💬 Chat, ✨ Creazioni, 🖥️ Permesso, ⏹ STOP, 🌙 Dormi, ⚙ Impostazioni, 📝 nota veloce, 🕐 ora, 💭 pensiero. Il tasto destro sull'avatar apre il menu con tutto; l'icona in basso a destra mostra o nasconde l'avatar, controlla gli aggiornamenti ed esce.
+- **I tasti** compaiono quando passi sopra l'avatar col mouse: 🎤 Parla, 👂 Orecchie, 💬 Chat, ✨ Creazioni, 🖥️ Permesso, 📞 Chiamata, ⏹ STOP, 🌙 Dormi, ⚙ Impostazioni, 📝 nota veloce, 🕐 ora, 💭 pensiero. Il tasto destro sull'avatar apre il menu con tutto; l'icona in basso a destra mostra o nasconde l'avatar, controlla gli aggiornamenti ed esce.
 - **Parla** è un interruttore: il primo clic ascolta, il secondo manda la frase. Stessa cosa con `Ctrl+Spazio`.
-- **STOP** ferma tutto, cancella la domanda aperta e scarica i modelli. Si può premere anche due volte. In chat, `Esc` ferma il turno.
+- **STOP** ferma tutto, cancella la domanda aperta, spegne le Orecchie e scarica i modelli. Si può premere anche due volte. In chat, `Esc` ferma il turno.
 - **Immagini**: trascina un'immagine sull'avatar. Se c'è Omni (o VL) la guarda. Un altro tipo di file: te lo dice e non lo tocca.
 
 
@@ -38,6 +38,29 @@ In alto c'è **Modelli**. Lì ci sono tutti i modelli di Liquidino, uno per riga
 - **Elimina**: spegne il motore e manda i file nel Cestino di Windows, così puoi ripensarci.
 
 Sopra ci sono i tasti **Cartella dei modelli**, **Cartella del motore**, **Cartella dei dati** e **Cartella del programma**: aprono Esplora file nel posto giusto.
+
+## Orecchie e «babbasone»
+
+Con le **Orecchie** (👂) accese non serve cliccare: lo chiami per nome.
+
+1. Mainframe → **Modelli** → **Scarica** su **Parakeet v3** (circa 650 MB). È il modello che trascrive, sulla CPU, anche in italiano.
+2. Mainframe → **Orecchie** → **Registra la parola**. Premi **● Registra** e di' «babbasone» come lo dici di solito. Ripeti 5 volte, meglio 10, poi **Tara**. Ti dice in quante registrazioni ti riconosce e quale soglia ha messo.
+3. Premi 👂 vicino all'avatar. Ora puoi dire «babbasone, che ore sono?», oppure solo «babbasone»: risponde «Dimmi.» e la frase dopo (entro 8 secondi) è per lui.
+
+Le Orecchie sentono anche **l'audio del PC** (video, musica, giochi, app), tutto tranne la sua voce. Lo tengono in mente qualche minuto, così puoi chiedere «cosa stavano dicendo nel video?». Non lo salvano, e quello che sentono dal PC non sono ordini. Si spegne nel Mainframe → Orecchie → «Sento l'audio del PC».
+
+La parola si cambia nel Mainframe. Dopo averla cambiata, registrala di nuovo.
+
+## Chiamata su Discord
+
+1. Entra nella chiamata su Discord, poi premi 📞 vicino all'avatar. Liquidino sente Discord a parte: sa cosa dicono gli altri e cosa dici tu.
+2. Se qualcuno in chiamata dice «babbasone, …», risponde **a voce**, in una o due frasi. Le mani sul PC le comandi solo tu: a loro non apre niente e un loro «sì» non conferma niente.
+3. **La sua voce nel tuo microfono**, così gli altri lo sentono:
+   - installa **VB-CABLE** (Mainframe → Orecchie → **Scarica VB-CABLE** apre il sito ufficiale; scarichi, estrai, avvii `VBCABLE_Setup_x64` come amministratore, **Install Driver**, poi riavvii il PC);
+   - nel Mainframe accendi «In chiamata, la mia voce nel microfono» e scegli quanto forte;
+   - in Discord: Impostazioni → Voce e video → Dispositivo di ingresso → **CABLE Output**.
+   Liquidino ci suona dentro il tuo microfono vero più la sua voce. Quando esci dalla chiamata, rimetti il tuo microfono in Discord.
+4. Premi di nuovo 📞 per uscire.
 
 ## Cosa sa fare
 
@@ -116,7 +139,11 @@ Dall'elenco delle app di Windows: Velopack registra la disinstallazione. I tuoi 
 | Il download si ferma o dice «impronta» | Il file arrivato non è quello giusto (rete instabile o file cambiato a metà). Il pezzo scaricato viene tolto: premi di nuovo Scarica. Serve spazio libero: il peso del modello più mezzo GB. |
 | Risposte lente o il PC fatica | Il regista tiene accesi al massimo due modelli. Chiudi giochi e programmi pesanti. Poi Impostazioni → «Prova il contesto sul serio»: sceglie il contesto che il PC regge davvero. |
 | Non sento la voce | Controlla uscita audio e volume. Senza Omni serve una voce italiana di Windows: Impostazioni → «Prova la voce» dice quali ha trovato. |
-| Non mi ascolta quando parlo | Il tasto Parla è un interruttore: il secondo clic invia. Per trascrivere serve Omni. La parola «Ehi Liquidino» non esiste ancora. |
+| Non mi ascolta quando parlo | Il tasto Parla è un interruttore: il secondo clic invia. Per trascrivere serve Omni. Per chiamarlo per nome accendi 👂 (serve Parakeet). |
+| Non risponde a «babbasone» | Controlla che 👂 sia acceso e che il microfono giusto sia scelto nel Mainframe → Orecchie. Poi **Registra la parola** 5-10 volte e premi **Tara**: impara come lo dici tu. |
+| Si sveglia da solo | Rifai la taratura con più registrazioni, in un posto silenzioso. Se succede con un video, è normale che lo senta: ma dall'audio del PC non si sveglia mai. |
+| In chiamata gli altri non lo sentono | Serve VB-CABLE, l'interruttore «la mia voce nel microfono» acceso, e in Discord il microfono «CABLE Output». Il Mainframe dice se VB-CABLE c'è. |
+| Gli altri non sentono più me dopo la chiamata | In Discord rimetti il tuo microfono vero al posto di «CABLE Output». |
 | «apri …» risponde che serve il permesso | Accendi 🖥️ Permesso vicino all'avatar. |
 | «Non trovo … fra i programmi del menu Start» | Usa il nome che vedi nel menu Start (per esempio «Blocco note», «Esplora file»). |
 | «Questo fallo tu: le mie mani…» | Hai chiesto un clic, di scrivere, chiudere o installare: non lo fa, per scelta. |

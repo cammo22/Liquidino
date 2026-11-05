@@ -30,6 +30,14 @@ public sealed class FinestraImpostazioni : Window
     readonly TextBlock _statoFirewall;
     readonly TextBlock _motore;
     readonly int[] _sceltaMinuti;
+    static readonly int[] Volumi = [50, 75, 100, 125, 150, 175, 200];
+    readonly TextBox _parola;
+    readonly Mainframe.Selettore _microfono;
+    readonly List<string> _microfoni;
+    readonly Mainframe.Interruttore _ascoltaPc;
+    readonly Mainframe.Interruttore _voceMic;
+    readonly Mainframe.Selettore _volumeMic;
+    readonly TextBlock _statoOrecchie;
 
     public FinestraImpostazioni(Ponte ponte)
     {
@@ -93,6 +101,48 @@ public sealed class FinestraImpostazioni : Window
         _notteFine = new Mainframe.Selettore(ore, Math.Clamp(imp.OraNotteFine, 0, 23));
         pensieri.Children.Add(Mainframe.Riga("Dorme dalle", _notteInizio));
         pensieri.Children.Add(Mainframe.Riga("Fino alle", _notteFine, "Di notte scarica i modelli e scrive il diario della giornata. Se hai usato la chat da poco, aspetta."));
+
+        _statoOrecchie = Mainframe.Nota("");
+        var registraParola = Mainframe.Tasto("Registra la parola");
+        registraParola.Click += (_, _) =>
+        {
+            new FinestraParola(_ponte) { Owner = this }.ShowDialog();
+            _statoOrecchie.Text = StatoOrecchie();
+        };
+        sinistra.Children.Add(Mainframe.Sezione("Orecchie", out var orecchie, registraParola));
+        _parola = Mainframe.Campo(imp.ParolaSveglia);
+        orecchie.Children.Add(Mainframe.Riga("Parola per svegliarmi", _parola,
+            "Con le Orecchie accese (👂) mi chiami così: «" + imp.ParolaSveglia + ", che ore sono?». Se la dici da sola, ti ascolto per 8 secondi. Registrala qualche volta con la tua voce: ti sento meglio."));
+        _microfoni = Dispositivi.Ingressi().Where(n => !CavoVirtuale.ECavo(n)).ToList();
+        var vociMic = new List<string> { "Predefinito di Windows" };
+        vociMic.AddRange(_microfoni);
+        _microfono = new Mainframe.Selettore(vociMic, Math.Max(0, _microfoni.IndexOf(imp.Microfono) + 1));
+        orecchie.Children.Add(Mainframe.Riga("Microfono", _microfono, "L'uscita di VB-CABLE non compare: non è un microfono vero."));
+        _ascoltaPc = new Mainframe.Interruttore(imp.AscoltaPc);
+        orecchie.Children.Add(Mainframe.Riga("Sento l'audio del PC", _ascoltaPc,
+            "Video, musica, giochi, app: tutto quello che suona il PC tranne la mia voce. Lo trascrivo e lo tengo in mente qualche minuto, senza salvarlo. Non sono ordini: li comandi solo tu."));
+        _voceMic = new Mainframe.Interruttore(imp.VoceNelMicrofono);
+        orecchie.Children.Add(Mainframe.Riga("In chiamata, la mia voce nel microfono", _voceMic,
+            "Con 📞 la mia voce va anche in «CABLE Input» insieme alla tua. In Discord: Impostazioni → Voce e video → Dispositivo di ingresso → «CABLE Output». Così gli altri sentono te e me."));
+        var volumeOra = Array.IndexOf(Volumi, imp.VolumeVoceMicrofono);
+        _volumeMic = new Mainframe.Selettore(Volumi.Select(v => v + "%").ToList(), volumeOra < 0 ? 2 : volumeOra);
+        orecchie.Children.Add(Mainframe.Riga("Quanto forte mi sentono", _volumeMic));
+        var cavo = CavoVirtuale.Ingresso(Dispositivi.Uscite());
+        var scaricaCavo = Mainframe.Tasto("Scarica VB-CABLE");
+        scaricaCavo.ToolTip = "Apre " + CavoVirtuale.PaginaUfficiale + " nel tuo browser. Lo installi tu, poi riavvii il PC.";
+        scaricaCavo.Click += (_, _) => ApriSito(CavoVirtuale.PaginaUfficiale);
+        orecchie.Children.Add(Mainframe.Riga("VB-CABLE", cavo is null ? scaricaCavo : (UIElement)new TextBlock
+        {
+            Text = "installato (" + cavo + ")",
+            FontFamily = Stile.Testo,
+            FontSize = 15,
+            Foreground = Mainframe.CianoP,
+            TextWrapping = TextWrapping.Wrap
+        }, cavo is null
+            ? "Il microfono finto di VB-Audio (donationware): non posso metterlo io nel programma. Dal sito: scarica, estrai, «VBCABLE_Setup_x64» come amministratore, Install Driver, riavvia."
+            : "Serve solo per la mia voce nel microfono. Le orecchie in chiamata funzionano anche senza."));
+        _statoOrecchie.Text = StatoOrecchie();
+        orecchie.Children.Add(_statoOrecchie);
 
         // ---------- colonna destra: motore, modelli, contesto, sicurezza, strumenti ----------
         var destra = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
@@ -267,6 +317,24 @@ public sealed class FinestraImpostazioni : Window
         var finestra = new FinestraModelli(_ponte) { Owner = this };
         finestra.ShowDialog();
         _motore.Text = StatoMotore();
+        _statoOrecchie.Text = StatoOrecchie();
+    }
+
+    string StatoOrecchie()
+    {
+        var imp = _ponte.Impostazioni;
+        var stato = OrecchioLeggero.Stato(imp.ParolaSveglia, _ponte.Regista.Rilevazione.CartellaModelli).Messaggio;
+        var adesso = _ponte.Udito.Accese
+            ? "Adesso: accese" + (_ponte.Udito.NomeMicrofono is { } m ? ", microfono " + m : ", senza microfono") + (_ponte.Udito.SenteIlPc ? ", audio del PC" : "")
+              + (_ponte.Udito.InChiamata ? ", in chiamata su " + _ponte.Udito.NomeChiamata + (_ponte.Udito.Cavo is null ? "" : " con la voce nel microfono") : "") + "."
+            : "Adesso: spente.";
+        return adesso + " " + stato;
+    }
+
+    void ApriSito(string indirizzo)
+    {
+        try { using (Process.Start(new ProcessStartInfo(indirizzo) { UseShellExecute = true })) { } }
+        catch (Exception e) { _esito.Text = "Questo fallo tu: apri " + indirizzo + " nel browser. " + e.Message; }
     }
 
     void Apri(string cartella)
@@ -343,6 +411,22 @@ public sealed class FinestraImpostazioni : Window
         imp.OraNotteInizio = _notteInizio.Indice;
         imp.OraNotteFine = _notteFine.Indice;
         ApplicaVoce();
+        var parola = _parola.Text.Trim();
+        if (parola.Length > 0) imp.ParolaSveglia = parola.Length > 40 ? parola[..40] : parola;
+        var microfono = _microfono.Indice == 0 ? "" : _microfoni[_microfono.Indice - 1];
+        var riaccendi = _ponte.Udito.Accese && (microfono != imp.Microfono || _ascoltaPc.Acceso != imp.AscoltaPc);
+        imp.Microfono = microfono;
+        imp.AscoltaPc = _ascoltaPc.Acceso;
+        imp.VoceNelMicrofono = _voceMic.Acceso;
+        imp.VolumeVoceMicrofono = Volumi[_volumeMic.Indice];
+        _ponte.Udito.RicaricaParola();
+        if (_ponte.Udito.Cavo is { } cavo) cavo.Guadagno = imp.VolumeVoceMicrofono / 100f;
+        if (riaccendi)
+        {
+            _esito.Text = "Riaccendo le Orecchie col microfono nuovo…";
+            _ponte.Udito.Spegni();
+            _ponte.Annuncia(await _ponte.Udito.Accendi());
+        }
         _esito.Text = "Salvo e riaccendo il motore…";
         await _ponte.RicaricaMotore();
         Close();

@@ -1,5 +1,32 @@
 # Novità
 
+## 0.5.0
+
+### Novità
+
+- **Orecchie** (👂 vicino all'avatar): lo chiami «babbasone» e ti risponde, senza clic. «babbasone, che ore sono?», oppure solo «babbasone»: dice «Dimmi.» e la frase dopo è per lui. La risposta arriva anche a voce.
+- **Parakeet v3** nella pagina Modelli: è il modello che trascrive, sulla CPU, anche in italiano. Si scarica col tuo sì e si controlla file per file.
+- **La parola tarata su di te**: Mainframe → Orecchie → **Registra la parola**. La dici 5-10 volte, lui impara come Parakeet scrive la tua voce e mette la soglia sopra le parole italiane che somigliano («basta», «bastone», «papà sono»…). La parola si cambia nel Mainframe.
+- **L'audio del PC**: con le Orecchie accese sente video, musica e app, tranne la sua voce, e lo tiene in mente qualche minuto. Puoi chiedere «cosa stavano dicendo?». Non lo salva, e non lo prende mai come un ordine.
+- **Chiamata su Discord** (📞): sente Discord a parte. Chi lo chiama per nome riceve una risposta a voce, ma le mani le comandi solo tu.
+- **La sua voce nel tuo microfono** in chiamata, con VB-CABLE: il Mainframe dice se c'è, apre il sito ufficiale per installarlo e spiega cosa scegliere in Discord. Si regola quanto forte lo sentono.
+- STOP spegne anche le Orecchie.
+
+### Correzioni
+
+- Se il microfono risente quello che esce dalle casse (un video, un amico in chiamata), non lo prende per la tua voce.
+- Il download dei modelli controlla anche i file piccoli, con l'impronta git che dà Hugging Face.
+
+### Da provare
+
+- Mainframe → **Modelli** → **Scarica** su Parakeet v3. Poi Mainframe → Orecchie → **Registra la parola**: registra «babbasone» 5 volte e premi **Tara**. Deve dire in quante ti riconosce.
+- Premi 👂. Di' «babbasone, che ore sono?»: deve rispondere a voce. Di' solo «babbasone»: deve dire «Dimmi.»; poi «raccontami una barzelletta».
+- Con 👂 accese, guarda un video su YouTube per un minuto, poi scrivi in chat «cosa diceva il video?».
+- Di' una frase normale senza il nome, per esempio «papà sono stanco»: non deve svegliarsi.
+- Entra in una chiamata su Discord e premi 📞. Chiedi a un amico di dire «babbasone, ci sei?»: deve rispondere. Se l'amico dice «babbasone, apri il blocco note», non deve aprire niente.
+- Installa VB-CABLE, accendi «la mia voce nel microfono», in Discord scegli «CABLE Output»: gli amici devono sentire te e lui. Poi esci con 📞 e rimetti il tuo microfono.
+- Premi STOP: le Orecchie si spengono.
+
 ## 0.4.0
 
 ### Novità

@@ -10,6 +10,8 @@ Il codice di Liquidino è MIT (vedi [LICENSE](LICENSE)). Qui sotto c'è quello c
 | NAudio | 2.2.1 | MIT, © Mark Heath e contributori | Microfono e lettura della voce. |
 | Velopack | 1.2.161 | MIT, © Velopack Ltd. | Installer e aggiornamenti. |
 | System.Speech | 8.0.0 | MIT, © .NET Foundation e contributori | Le voci italiane di Windows, quando Omni non c'è. |
+| sherpa-onnx (`org.k2fsa.sherpa.onnx`) | 2.0.1 | Apache-2.0, © Xiaomi Corporation e contributori di k2-fsa | Fa girare Parakeet sulla CPU per le Orecchie. |
+| ONNX Runtime (dentro sherpa-onnx) | — | MIT, © Microsoft Corporation | Il motore che esegue i modelli ONNX. |
 | Orbitron | — | SIL Open Font License 1.1, © 2018 The Orbitron Project Authors | Carattere dei titoli. `licenze/OFL-orbitron.txt` |
 | Rajdhani | — | SIL Open Font License 1.1, © 2014 Indian Type Foundry | Carattere del testo. `licenze/OFL-rajdhani.txt` |
 | DSEG7 Classic | — | SIL Open Font License 1.1, © 2020 keshikan, nome riservato «DSEG» | Carattere a segmenti. `licenze/OFL-dseg.txt` |
@@ -20,9 +22,11 @@ Il codice di Liquidino è MIT (vedi [LICENSE](LICENSE)). Qui sotto c'è quello c
 | Componente | Licenza | Nota |
 | --- | --- | --- |
 | llama.cpp (`llama-server`) | MIT, © The ggml authors | Non è incluso: si indica la cartella dove c'è già. |
-| Modelli LFM3 di Liquid AI (GGUF) | LFM Open License v1.0 | Non sono inclusi. Uso personale. |
+| Modelli LFM3 di Liquid AI (GGUF) | LFM Open License v1.0 | Non sono inclusi: si scaricano dalla pagina Modelli, solo col tuo clic. Uso personale. |
+| Parakeet TDT 0.6B v3 di NVIDIA, versione int8 per sherpa-onnx (`csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8`) | CC-BY-4.0, © NVIDIA | Non è incluso: si scarica dalla pagina Modelli, solo col tuo clic. Attribuzione: «Parakeet TDT 0.6B v3» di NVIDIA, convertito in ONNX dal progetto k2-fsa/sherpa-onnx. |
+| VB-CABLE di VB-Audio | Donationware, © Vincent Burel | Non è incluso e non si può ridistribuire: il tasto «Scarica VB-CABLE» apre il sito ufficiale nel tuo browser, lo installi tu. |
 | Voci di Windows (SAPI) | Parte di Windows | Si usano quelle installate, non se ne scarica nessuna. |
 | `stories15M-q4_0.gguf` (da `ggml-org/models`, nato da `karpathy/llama2.c`) | MIT, come il repository llama2.c | Solo nella prova automatica della CI, mai nel programma. |
 | xUnit, Microsoft.NET.Test.Sdk | Apache-2.0, MIT | Solo per le prove. |
 
-Previsti, non ancora presenti: Silero VAD (MIT) e il codice di openWakeWord (Apache-2.0) per la parola «Ehi Liquidino». I modelli già pronti di openWakeWord non si usano: sono in inglese e non commerciali.
+La parola per svegliarlo («babbasone») non usa modelli già addestrati da altri: Parakeet trascrive, e il confronto con le tue registrazioni è codice di Liquidino (`ParolaSveglia`). Il rilevatore della voce guarda l'energia del suono, senza modelli.

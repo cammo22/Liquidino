@@ -137,9 +137,37 @@ public static class ProvaAvvio
             var modelli = new FinestraModelli(ponte);
             modelli.Show();
             await Attesa();
-            Verifica(modelli.Schede == CatalogoModelli.Tutti.Count, "la pagina dei modelli mostra tutto il catalogo");
+            Verifica(modelli.Schede == CatalogoModelli.Tutti.Count + 1, "la pagina dei modelli mostra tutto il catalogo, Parakeet compreso");
             modelli.Close();
             riga("PASS pagina dei modelli (senza scaricare niente)");
+
+            var parola = new FinestraParola(ponte);
+            parola.Show();
+            await Attesa(1500);
+            parola.Close();
+            riga("PASS finestra della parola");
+
+            // Senza Parakeet le Orecchie non si accendono e lo dicono, senza rompersi.
+            string? detto = null;
+            ponte.Annuncio += a => detto = a;
+            await ponte.AlternaOrecchie();
+            await Attesa();
+            if (ponte.Udito.ParakeetPresente) riga("INFO Parakeet c'è: orecchie " + (ponte.Udito.Accese ? "accese" : "spente") + ". " + detto);
+            else
+            {
+                Verifica(!ponte.Udito.Accese && detto is not null && detto.Contains("Parakeet"), "senza Parakeet le Orecchie restano spente e lo dicono");
+                riga("PASS orecchie senza Parakeet: " + detto);
+            }
+            if (ponte.Udito.Accese) await ponte.AlternaOrecchie();
+
+            // La cattura dell'audio del PC dipende dalla macchina (le macchine della CI possono non avere l'audio): solo informazione.
+            try
+            {
+                using var audioPc = await CatturaProcesso.Apri(Environment.ProcessId, includi: false, CancellationToken.None);
+                riga("INFO cattura dell'audio del PC senza Liquidino: si apre");
+            }
+            catch (Exception e) { riga("INFO cattura dell'audio del PC: non disponibile qui (" + e.GetType().Name + ": " + e.Message + ")"); }
+            riga("INFO microfoni: " + Dispositivi.Ingressi().Count + ", uscite: " + Dispositivi.Uscite().Count + ", VB-CABLE: " + (Dispositivi.Cavo() is null ? "no" : "sì"));
 
             var novita = new FinestraNovita();
             novita.Show();
