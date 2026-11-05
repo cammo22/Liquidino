@@ -15,6 +15,11 @@ public sealed class FinestraImpostazioni : Window
     readonly CheckBox _ciclo;
     readonly ComboBox _carattere;
     readonly ComboBox _voce;
+    readonly CheckBox _voceWindows;
+    readonly WrapPanel _strumenti;
+    readonly TextBlock _esito;
+    readonly TextBlock _contesto;
+    readonly TextBlock _statoFirewall;
 
     public FinestraImpostazioni(Ponte ponte)
     {
@@ -22,7 +27,7 @@ public sealed class FinestraImpostazioni : Window
         var imp = ponte.Impostazioni;
         Title = "Impostazioni";
         Width = 560;
-        Height = 560;
+        Height = 640;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -82,6 +87,22 @@ public sealed class FinestraImpostazioni : Window
         _voce.Items.Add("maschile");
         _voce.SelectedIndex = imp.Voce == "male" ? 1 : 0;
         pila.Children.Add(_voce);
+        _voceWindows = new CheckBox
+        {
+            Content = "Se Omni non c'è o non parla, leggo con le voci italiane di Windows",
+            IsChecked = imp.VoceWindows,
+            Foreground = Stile.Inchiostro,
+            FontFamily = Stile.Testo,
+            FontSize = 16,
+            Margin = new Thickness(0, 8, 0, 2)
+        };
+        pila.Children.Add(_voceWindows);
+        var descrizioneVoci = Stile.Riga("Cerco le voci…", secondario: true);
+        pila.Children.Add(descrizioneVoci);
+        _ = Task.Run(VoceWindows.Descrizione).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully) descrizioneVoci.Text = t.Result;
+        }, TaskScheduler.FromCurrentSynchronizationContext());
 
         var misura = Stile.Bottone("Misura di nuovo il PC");
         misura.HorizontalAlignment = HorizontalAlignment.Left;
@@ -92,7 +113,84 @@ public sealed class FinestraImpostazioni : Window
             System.Windows.MessageBox.Show(imp.FraseContesto, "Liquidino");
         };
         pila.Children.Add(misura);
-        pila.Children.Add(Stile.Riga("Contesto attuale: mani " + imp.ContestoMani + ", Omni " + imp.ContestoOmni + ", d1 " + imp.ContestoD1 + ".", secondario: true));
+        _contesto = Stile.Riga(TestoContesto(), secondario: true);
+        pila.Children.Add(_contesto);
+
+        _esito = Stile.Riga("", secondario: true);
+        pila.Children.Add(Etichetta("Strumenti"));
+        _strumenti = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var dettagli = Stile.Bottone("Copia dettagli errore");
+        dettagli.Margin = new Thickness(0, 4, 8, 4);
+        dettagli.Click += (_, _) => CopiaDettagli();
+        _strumenti.Children.Add(dettagli);
+        var provaVoce = Stile.Bottone("Prova la voce");
+        provaVoce.Margin = new Thickness(0, 4, 8, 4);
+        provaVoce.Click += async (_, _) =>
+        {
+            ApplicaVoce();
+            _esito.Text = "Provo a leggere una frase…";
+            try { await _ponte.Parla("Ciao, sono Liquidino. Mi senti bene?", _ponte.Token()); }
+            catch (OperationCanceledException) { /* STOP: va bene così */ }
+            _esito.Text = "Se non hai sentito niente, guarda il volume e l'uscita audio. Il testo resta comunque in chat.";
+        };
+        _strumenti.Children.Add(provaVoce);
+
+        var provaContesto = Stile.Bottone("Prova il contesto sul serio");
+        provaContesto.Margin = new Thickness(0, 4, 8, 4);
+        provaContesto.ToolTip = "Riempie davvero la memoria del motore, partendo da 128K e scendendo finché regge. Può volerci qualche minuto. STOP la ferma.";
+        var provaInCorso = false;
+        provaContesto.Click += async (_, _) =>
+        {
+            // Questa finestra blocca le altre: lo STOP della prova sta qui, sullo stesso tasto.
+            if (provaInCorso)
+            {
+                _ponte.Annulla();
+                _esito.Text = "Fermo la prova…";
+                return;
+            }
+            provaInCorso = true;
+            provaContesto.Content = "Ferma la prova";
+            _esito.Text = "Comincio la prova di carico. Il motore si riaccende a ogni gradino.";
+            try
+            {
+                var esito = await _ponte.ProvaContestoVera(passo => _esito.Text = passo);
+                _esito.Text = esito.Frase();
+                _contesto.Text = TestoContesto();
+            }
+            finally
+            {
+                provaInCorso = false;
+                provaContesto.Content = "Prova il contesto sul serio";
+            }
+        };
+        _strumenti.Children.Add(provaContesto);
+
+        var firewall = Stile.Bottone("Togli internet a llama-server");
+        firewall.Margin = new Thickness(0, 4, 8, 4);
+        firewall.ToolTip = "Crea una regola di Windows Firewall. Windows chiede il permesso dell'amministratore una volta.";
+        firewall.Click += async (_, _) =>
+        {
+            if (_ponte.Regista.Eseguibile is not { } exe)
+            {
+                _esito.Text = "Questo fallo tu: non trovo llama-server nella cartella del motore.";
+                return;
+            }
+            firewall.IsEnabled = false;
+            _esito.Text = "Windows ti chiederà il permesso…";
+            try
+            {
+                var detto = await Firewall.Crea(exe);
+                _esito.Text = detto;
+                _ponte.Registro.Scrivi("firewall", detto, detto.StartsWith("Fatto", StringComparison.Ordinal) ? "ok" : "rifiutato");
+                await AggiornaFirewall();
+            }
+            finally { firewall.IsEnabled = true; }
+        };
+        _strumenti.Children.Add(firewall);
+        _statoFirewall = Stile.Riga("Regola del firewall: controllo…", secondario: true);
+        pila.Children.Add(_strumenti);
+        pila.Children.Add(_statoFirewall);
+        pila.Children.Add(_esito);
 
         var tasti = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 18, 0, 0) };
         var salva = Stile.Bottone("Salva", principale: true);
@@ -115,6 +213,11 @@ public sealed class FinestraImpostazioni : Window
             CornerRadius = new CornerRadius(16),
             Child = new ScrollViewer { Content = pila, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
         };
+        Loaded += async (_, _) =>
+        {
+            try { await AggiornaFirewall(); }
+            catch { _statoFirewall.Text = "Regola del firewall: non riesco a leggerla."; }
+        };
         MouseLeftButtonDown += (_, e) =>
         {
             if (e.OriginalSource is Button or TextBox or ComboBox or CheckBox) return;
@@ -131,6 +234,51 @@ public sealed class FinestraImpostazioni : Window
         Margin = new Thickness(0, 10, 0, 4)
     };
 
+    string TestoContesto()
+    {
+        var imp = _ponte.Impostazioni;
+        return "Contesto attuale: mani " + imp.ContestoMani + ", Omni " + imp.ContestoOmni + ", d1 " + imp.ContestoD1 + "."
+            + (string.IsNullOrWhiteSpace(imp.FraseContesto) ? "" : " " + imp.FraseContesto);
+    }
+
+    async Task AggiornaFirewall()
+    {
+        if (_ponte.Regista.Eseguibile is not { } exe)
+        {
+            _statoFirewall.Text = "Regola del firewall: llama-server non è stato trovato.";
+            return;
+        }
+        var c = await Firewall.Controlla(exe);
+        _statoFirewall.Text = c switch
+        {
+            true => "Regola del firewall: c'è, llama-server non va in internet.",
+            false => "Regola del firewall: non c'è. llama-server ascolta solo su 127.0.0.1, ma la regola lo chiude anche verso fuori.",
+            _ => "Regola del firewall: non riesco a leggerla."
+        };
+    }
+
+    void ApplicaVoce()
+    {
+        var imp = _ponte.Impostazioni;
+        imp.Voce = _voce.SelectedIndex == 1 ? "male" : "female";
+        imp.VoceWindows = _voceWindows.IsChecked == true;
+    }
+
+    void CopiaDettagli()
+    {
+        var sistema = Environment.OSVersion.VersionString + (Environment.Is64BitOperatingSystem ? ", 64 bit" : "");
+        var testo = DettagliErrore.Componi(Ponte.Versione, sistema, _ponte.Regista.Riassunto(), _ponte.Registro);
+        try
+        {
+            System.Windows.Clipboard.SetText(testo);
+            _esito.Text = "Dettagli copiati. Prima di incollarli guarda che non ci sia niente di tuo: la chat e la memoria non ci sono.";
+        }
+        catch (Exception e)
+        {
+            _esito.Text = "Questo fallo tu: gli appunti sono occupati da un altro programma. Riprova fra un attimo. (" + e.Message + ")";
+        }
+    }
+
     void Sfoglia()
     {
         var dialogo = new OpenFolderDialog { Title = "Cartella di llama.cpp", InitialDirectory = _cartella.Text };
@@ -145,7 +293,7 @@ public sealed class FinestraImpostazioni : Window
         imp.CicloAutonomo = _ciclo.IsChecked == true;
         if (int.TryParse(_minuti.Text.Trim(), out var minuti)) imp.CicloMinuti = Math.Clamp(minuti, 5, 24 * 60);
         if (_carattere.SelectedItem is string carattere) imp.Carattere = carattere;
-        imp.Voce = _voce.SelectedIndex == 1 ? "male" : "female";
+        ApplicaVoce();
         await _ponte.RicaricaMotore();
         Close();
     }

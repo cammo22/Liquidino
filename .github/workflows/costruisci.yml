@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+# Un nuovo commit chiude il run precedente dello stesso ramo, così una prova
+# appesa non tiene occupato il runner fino al tetto delle sei ore.
+concurrency:
+  group: costruisci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -22,18 +28,30 @@ jobs:
       - name: Prove
         run: dotnet test Liquidino.sln -c Release --nologo
 
+      - name: Prova con llama-server
+        timeout-minutes: 8
+        shell: pwsh
+        run: ./scripts/prova-motore.ps1
+
       - name: Installer
         shell: pwsh
         run: ./scripts/pacchetto.ps1
 
+      - name: Prova di avvio dell'app pubblicata
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./scripts/prova-avvio.ps1
+
       - name: Artefatto
         uses: actions/upload-artifact@v4
         with:
-          name: Liquidino-Setup
+          name: Liquidino
           path: |
             Releases/Liquidino-Setup.exe
+            Releases/Liquidino-portatile.zip
             Releases/*.nupkg
             Releases/releases.win.json
+            Releases/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Release

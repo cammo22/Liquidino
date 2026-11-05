@@ -1,21 +1,30 @@
 # Roadmap
 
-Questa è la prova minima: si avvia, si parla, si scrive, si ricorda. Il resto è scritto qui, non è nel programma.
+Avanzamento verso la versione definitiva:
 
-## Rimandato
+- **Nel programma (0.3.0): 65%.** È scritto, provato dalle prove automatiche e dall'avvio dell'app in CI su Windows.
+- **Verificato sul PC di prova: 41%.** Quello della 0.2.1. Sale quando i punti «Da provare» del [CHANGELOG](CHANGELOG.md) passano sul PC con la RTX 4060.
 
-- **Parola «Ehi Liquidino».** La struttura c'è (`orecchio/`, Silero VAD licenza MIT, codice openWakeWord licenza Apache-2.0). Manca il modello addestrato da noi. I modelli già pronti di openWakeWord sono in inglese e non commerciali: non li mettiamo. Per ora: clic, tasto «Parla», Ctrl+Spazio.
-- **Uso del PC.** C'è il tasto Permesso, lo STOP e il registro. Non c'è il cursore suo, né l'elenco delle azioni sul desktop, né il mouse. Se glielo chiedi, dice di farlo tu.
-- **Evolversi.** Conta gli errori e, dopo dodici, lo dice una volta al giorno. Non parte nessun addestramento e non sostituisce il modello. La versione precedente si conserverà quando questa parte esisterà.
-- **Voce diretta.** La prova sulla RTX 4060 ha mostrato che la voce intrecciata di Omni in italiano non è affidabile. Si usa il testo più `/tts`. Si riprova quando i modelli migliorano.
-- **d1-Omni, VL, Audio.** Il regista li riconosce e li può caricare se i file GGUF ci sono (mai più di due insieme). Nel flusso di tutti i giorni usiamo d1, Omni e, per compilare le azioni, LFM3-1.7B. VL serve se ci trascini un'immagine e Omni non c'è.
-- **Contesto 128K misurato sul serio.** All'avvio si leggono RAM e VRAM e si sceglie (sul PC di prova: 128K per le mani). Non si fa ancora una prova di carico che riempie davvero la cache. Cache KV q4 e flash-attention sono nel preset. Il salvataggio dello slot su disco viene chiamato; va verificato su quel PC.
-- **Creazioni.** C'è l'elenco dei file, il cestino e la cartella. Mancano le icone grandi, i filtri, l'anteprima e il diario della giornata.
-- **Avatar che muove la bocca.** Gli sprite approvati restano. Un viso 3D con la bocca sincronizzata (TalkingHead) è un'idea successiva, e servirebbe un modello con le forme della bocca.
-- **Piano B della voce su CPU** (Kokoro) se Omni non c'è.
-- **Regola del firewall** che blocca llama-server verso l'esterno. Il programma lo avvia già solo su 127.0.0.1.
-- **Fase di amicizia più ricca.** Per i primi 14 giorni il pensiero orario è un saluto, non una creazione scelta da lui. Dopo, d1 può scegliere il silenzio o una nota. Manca il voto tuo sulle creazioni e il rifacimento guidato, oltre al cestino quando il file esce vuoto.
+Il 100% è Liquidino che sta sul desktop da solo: ti sente quando lo chiami, fa le cose sul PC solo se glielo permetti, ricorda, crea, e si può far evolvere senza perdere la versione di prima.
 
-## Già in questa prova
+| Pezzo | Peso | Nel programma | Verificato | Manca per il 100% |
+| --- | ---: | ---: | ---: | --- |
+| Parola «Ehi Liquidino» | 10 | 0 | 0 | Il modello addestrato da noi, con registrazioni della parola in italiano. La cartella `orecchio/` c'è. Silero VAD è MIT, il codice di openWakeWord è Apache-2.0; i modelli già pronti di openWakeWord non si usano. Per ora: clic, «Parla», Ctrl+Spazio. |
+| Uso del PC | 15 | 8 | 2 | Ci sono il permesso, i gesti chiusi (programma dopo il sì, cartelle, volume, pausa, schermo), lo STOP e il registro. Mancano il mouse, la tastiera e il suo cursore sullo schermo, e i livelli di permesso per singolo gesto. |
+| Voce | 10 | 8 | 6 | Capisce e legge con Omni (`/tts`); se Omni non c'è, le voci italiane di Windows. Non si ascolta mentre parla. Manca la voce intrecciata di Omni in italiano, che sulla RTX 4060 non era affidabile. |
+| Modelli e dati | 10 | 10 | 8 | Nel programma c'è tutto: caricamento prima di rispondere, due modelli accesi mentre si chiacchiera, dati fuori dalla cartella di Velopack, prova di carico, slot salvato su disco (in CI con un llama-server vero sì; prima non funzionava), regola del firewall. Va provato sul PC. |
+| Interfaccia | 8 | 7 | 7 | Manca la bocca sincronizzata (TalkingHead): gli sprite approvati restano, e un viso nuovo vuole l'ok del proprietario. |
+| Memoria e creazioni | 10 | 10 | 5 | Nel programma: note, memoria in markdown, cestino, cartelle, ricerca, icone grandi, anteprima, diario della giornata. Va provato sul PC. |
+| Evolversi | 10 | 1 | 1 | Conta gli errori e, dopo dodici, lo dice una volta al giorno. Manca l'addestramento vero e la versione di prima tenuta da parte: serve la GPU e un insieme di esempi tuoi, e non parte mai da solo. |
+| Notte e autonomia | 7 | 7 | 6 | Nel programma: notte, ciclo spegnibile, fase di amicizia, voto sulle creazioni, rifacimento guidato, diario. Va provato sul PC. |
+| Vista e altri modelli | 10 | 4 | 2 | Omni o VL guardano le immagini trascinate e lo schermo (col permesso). Il regista riconosce d1-Omni e Audio e li carica se i file ci sono, mai più di due insieme, ma non sono ancora nel giro quotidiano. |
+| Contesto misurato sul serio | 10 | 10 | 4 | La prova di carico riempie davvero la cache (Impostazioni → «Prova il contesto sul serio»), da 128K in giù. In CI gira in piccolo con un llama-server vero. Va fatta sul PC di prova. |
 
-Avatar con i quattro stati, chat, push-to-talk, regista con al massimo due modelli, catalogo di sei azioni con soglia 0,6, memoria in markdown, ciclo orario spegnibile, STOP, registro, setup del primo avvio.
+Si sale nella colonna «Nel programma» quando un pezzo della colonna «Manca» entra nel codice con le sue prove. Si sale in «Verificato» quando resta giusto anche sul PC.
+
+## Cosa resta, e perché non è già qui
+
+- **«Ehi Liquidino»**: senza un modello addestrato sulla parola detta in italiano non c'è niente da far girare. Servono registrazioni (anche sintetiche) e un addestramento.
+- **Mouse e tastiera**: un clic sbagliato può cancellare o mandare qualcosa. Prima vanno decisi insieme i livelli di permesso e cosa vede Liquidino mentre lo fa.
+- **Evolversi**: un addestramento vero sul PC, con la versione di prima tenuta da parte. È un lavoro a sé, e parte solo se lo chiedi tu.
+- **Bocca che si muove**: serve un viso nuovo, e l'avatar non si rifà senza l'ok del proprietario.

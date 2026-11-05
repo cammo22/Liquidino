@@ -235,8 +235,10 @@ public static class PresetMotore
             "; Generato da Liquidino. Si può leggere. Al prossimo avvio del motore viene riscritto.",
             "[*]",
             "flash-attn = on",
-            "cache-type-k = q4_0",
-            "cache-type-v = q4_0",
+            // Il GGUF minuscolo della CI ha la testa da 48: q4_0 (blocchi da 32) non ci sta.
+            // Sul PC vero la cache resta q4. LIQUIDINO_E2E non è mai acceso nell'installazione.
+            "cache-type-k = " + (ProvaInCi() ? "f16" : "q4_0"),
+            "cache-type-v = " + (ProvaInCi() ? "f16" : "q4_0"),
             "n-gpu-layers = 99",
             "parallel = 1",
             "slot-save-path = " + PerIni(cartellaSlot),
@@ -249,7 +251,8 @@ public static class PresetMotore
             if (!string.IsNullOrWhiteSpace(m.Mmproj))
                 righe.Add("mmproj = " + PerIni(m.Mmproj));
             righe.Add("ctx-size = " + NomiModello.Contesto(m.Ruolo, imp));
-            if (m.Ruolo is RuoloModello.Mani or RuoloModello.Omni or RuoloModello.Vl or RuoloModello.Audio)
+            if (m.Ruolo is RuoloModello.Mani or RuoloModello.Omni or RuoloModello.Vl or RuoloModello.Audio
+                && m.NomeFile.Contains("lfm", StringComparison.OrdinalIgnoreCase))
             {
                 righe.Add("jinja = true");
                 righe.Add("reasoning = off");
@@ -321,6 +324,8 @@ public static class PresetMotore
     }
 
     static string PerIni(string percorso) => percorso.Replace('\\', '/');
+
+    static bool ProvaInCi() => Environment.GetEnvironmentVariable("LIQUIDINO_E2E") == "1";
 }
 
 /// <summary>Tiene il conto di chi è acceso. Rifiuta un terzo modello.</summary>
@@ -335,8 +340,19 @@ public static class PoliticaCarico
         var distinti = voluti.Distinct().ToList();
         if (distinti.Count > MassimoInsieme)
             throw new InvalidOperationException("Mai più di due modelli insieme.");
-        var spegni = accesi.Where(a => !distinti.Contains(a)).ToList();
         var accendi = distinti.Where(v => !accesi.Contains(v)).ToList();
+        var spegni = new List<RuoloModello>();
+        var occupati = accesi.Count + accendi.Count;
+        if (occupati > MassimoInsieme)
+        {
+            var daTogliere = occupati - MassimoInsieme;
+            foreach (var a in accesi.OrderBy(a => a == RuoloModello.D1 ? 1 : 0))
+            {
+                if (distinti.Contains(a)) continue;
+                spegni.Add(a);
+                if (spegni.Count == daTogliere) break;
+            }
+        }
         var dopo = accesi.Count - spegni.Count + accendi.Count;
         if (dopo > MassimoInsieme)
             throw new InvalidOperationException("Mai più di due modelli insieme.");

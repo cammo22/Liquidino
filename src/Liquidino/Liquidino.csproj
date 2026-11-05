@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Liquidino</RootNamespace>
@@ -12,11 +13,22 @@
     <ApplicationIcon>..\..\risorse\icona.ico</ApplicationIcon>
     <Description>Compagno da desktop, offline, solo per uso personale.</Description>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+    <!-- WFAC010 vale per le app WinForms: qui WinForms serve solo al vassoio, i DPI li decide il manifest di WPF. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
+
+  <!-- WinForms serve solo all'icona nel vassoio. Se restasse importato ovunque,
+       Button, Image e gli altri nomi di WPF diventerebbero ambigui. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Liquidino.Nucleo\Liquidino.Nucleo.csproj" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Voci di Windows (SAPI), già sul PC: il piano B quando Omni non c'è. Niente rete. -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
@@ -27,6 +39,7 @@
     <Resource Include="..\..\risorse\font\Rajdhani-Medium.ttf" Link="font\Rajdhani-Medium.ttf" />
     <Resource Include="..\..\risorse\font\Rajdhani-Bold.ttf" Link="font\Rajdhani-Bold.ttf" />
     <Resource Include="..\..\risorse\font\DSEG7Classic-Bold.ttf" Link="font\DSEG7Classic-Bold.ttf" />
+    <Content Include="..\..\risorse\icona.ico" Link="icona.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\avatar\*.*" Link="avatar\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\prompt\sistema.md" Link="prompt\sistema.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\catalogo\azioni.json" Link="catalogo\azioni.json" CopyToOutputDirectory="PreserveNewest" />
@@ -37,5 +50,7 @@
     <Content Include="..\..\risorse\font\OFL-orbitron.txt" Link="licenze\OFL-orbitron.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\font\OFL-rajdhani.txt" Link="licenze\OFL-rajdhani.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\risorse\font\OFL-dseg.txt" Link="licenze\OFL-dseg.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="licenze\THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\LICENSE" Link="licenze\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

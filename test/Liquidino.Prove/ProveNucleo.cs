@@ -40,7 +40,9 @@ public class ProveNucleo
     public void Il_catalogo_ha_le_sei_azioni()
     {
         var nomi = CatalogoAzioni.Predefinito().Azioni.Select(a => a.Nome).ToArray();
-        Assert.Equal(["rispondi", "crea_nota", "ricorda", "dimentica", "mostra_creazioni", "dormi"], nomi);
+        Assert.Equal(["rispondi", "che_ore_sono", "crea_nota", "ricorda", "dimentica", "mostra_creazioni", "dormi"], nomi);
+        Assert.Contains("chi sei", CatalogoAzioni.Criterio(CatalogoAzioni.Predefinito().Trova("rispondi")!));
+        Assert.Contains("ciao", CatalogoAzioni.IstruzioniD1);
         var riletto = CatalogoAzioni.Leggi(CatalogoAzioni.Predefinito().AJson());
         Assert.Equal(nomi, riletto.Azioni.Select(a => a.Nome).ToArray());
         Assert.Contains("note", riletto.Trova("crea_nota")!.Schema);
@@ -95,8 +97,8 @@ public class ProveNucleo
         imp.ApplicaContesto(SceltaContesto.Scegli(new InfoMacchina(InfoMacchina.Gb(63), 8192L * 1024 * 1024)));
         var schede = new[]
         {
-            new SchedaModello(RuoloModello.Mani, "liquidino-mani", Path.Combine(dir, "mani.gguf"), null, "mani.gguf"),
-            new SchedaModello(RuoloModello.Omni, "liquidino-omni", Path.Combine(dir, "omni.gguf"), Path.Combine(dir, "mm.gguf"), "omni.gguf"),
+            new SchedaModello(RuoloModello.Mani, "liquidino-mani", Path.Combine(dir, "LFM3-1.7B-Q4_K_M.gguf"), null, "LFM3-1.7B-Q4_K_M.gguf"),
+            new SchedaModello(RuoloModello.Omni, "liquidino-omni", Path.Combine(dir, "LFM3-Omni-2B-Q4_K_M.gguf"), Path.Combine(dir, "mm.gguf"), "LFM3-Omni-2B-Q4_K_M.gguf"),
             new SchedaModello(RuoloModello.D1, "liquidino-d1", Path.Combine(dir, "d1.gguf"), null, "d1.gguf")
         };
         var ini = PresetMotore.Scrivi(Path.Combine(dir, "modelli.ini"), Path.Combine(dir, "slot"), schede, imp);
@@ -116,8 +118,11 @@ public class ProveNucleo
     {
         var accesi = new[] { RuoloModello.D1, RuoloModello.Omni };
         var piano = PoliticaCarico.Calcola(accesi, [RuoloModello.Mani]);
-        Assert.Equal(2, piano.Spegni.Count);
+        Assert.Single(piano.Spegni);
         Assert.Equal([RuoloModello.Mani], piano.Accendi);
+        var insieme = PoliticaCarico.Calcola([RuoloModello.D1], [RuoloModello.Omni]);
+        Assert.Empty(insieme.Spegni);
+        Assert.Equal([RuoloModello.Omni], insieme.Accendi);
         Assert.Throws<InvalidOperationException>(() =>
             PoliticaCarico.Calcola([], [RuoloModello.D1, RuoloModello.Omni, RuoloModello.Mani]));
         var resta = PoliticaCarico.Calcola(accesi, [RuoloModello.D1, RuoloModello.Omni]);
@@ -187,7 +192,9 @@ public class ProveNucleo
         var dialogo = new Dialogo(imp, mondo, registro, finto, CatalogoAzioni.Predefinito());
         var prima = await dialogo.Messaggio("forse una nota", CancellationToken.None);
         Assert.True(prima.ChiestaConferma);
-        Assert.Contains("0,45", prima.Testo);
+        Assert.Equal("Vuoi che me lo segni in una nota?", prima.Testo);
+        Assert.DoesNotContain("0,45", prima.Testo);
+        Assert.DoesNotContain("sicurezza", prima.Testo, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(mondo.Elenca(), v => v.Cartella == "note");
         var dopo = await dialogo.Messaggio("sì", CancellationToken.None);
         Assert.False(dopo.ChiestaConferma);
@@ -266,7 +273,8 @@ public class ProveNucleo
             dir = dir.Parent;
         Assert.NotNull(dir);
         var cat = CatalogoAzioni.Carica(Path.Combine(dir!.FullName, "risorse", "catalogo", "azioni.json"));
-        Assert.Equal(6, cat.Azioni.Count);
+        Assert.Equal(7, cat.Azioni.Count);
+        Assert.NotNull(cat.Trova("che_ore_sono"));
         Assert.Contains("{{carattere}}", File.ReadAllText(Path.Combine(dir.FullName, "risorse", "prompt", "sistema.md")));
     }
 
@@ -342,55 +350,130 @@ public class ProveNucleo
         Assert.Equal("dimentica", DecisoreLocale.Scegli("dimentica il dentista").Azione);
         Assert.Equal("mostra_creazioni", DecisoreLocale.Scegli("fammi vedere cosa hai creato").Azione);
         Assert.Equal("rispondi", DecisoreLocale.Scegli("che tempo fa").Azione);
+        Assert.False(DecisoreLocale.Scegli("ciao").ChiediConferma);
+        Assert.Equal("rispondi", DecisoreLocale.Scegli("CHI SEI").Azione);
+        Assert.Equal("rispondi", DecisoreLocale.Scegli("come stai").Azione);
+        Assert.Equal("ricorda", DecisoreLocale.Scegli("ricordati che mi piace il viola").Azione);
+        Assert.Equal("crea_nota", DecisoreLocale.Scegli("scrivi una nota: pane e latte").Azione);
+        Assert.Equal("che_ore_sono", DecisoreLocale.Scegli("leggi l'ora").Azione);
+        Assert.False(DecisoreLocale.Scegli("che ore sono").ChiediConferma);
     }
 
-    static string Temporanea()
+    [Fact]
+    public void Chiacchierare_non_chiede_conferma_e_se_d1_e_incerto_risponde()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "liquidino-prove-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        return dir;
+        var ammesse = CatalogoAzioni.Predefinito().Azioni.Select(a => a.Nome).ToList();
+        var bassa = """
+            {"answers":{"azione":{"choice":"rispondi","probabilities":{"rispondi":0.34,"crea_nota":0.33,"ricorda":0.32},"confidence":0.2}}}
+            """;
+        var scelta = LettoreDecisione.Leggi(bassa, ammesse)!;
+        Assert.Equal("rispondi", scelta.Azione);
+        Assert.False(scelta.ChiediConferma);
+
+        var incerto = """
+            {"answers":{"azione":{"choice":"crea_nota","probabilities":{"crea_nota":0.36,"rispondi":0.34},"confidence":0.3}}}
+            """;
+        var piano = LettoreDecisione.Leggi(incerto, ammesse)!;
+        Assert.Equal("rispondi", piano.Azione);
+        Assert.False(piano.ChiediConferma);
+
+        var chiaro = """
+            {"answers":{"azione":{"choice":"crea_nota","probabilities":{"crea_nota":0.45,"rispondi":0.30,"ricorda":0.25},"confidence":0.4}}}
+            """;
+        var nota = LettoreDecisione.Leggi(chiaro, ammesse)!;
+        Assert.Equal("crea_nota", nota.Azione);
+        Assert.True(nota.ChiediConferma);
+        Assert.True(nota.Sicurezza < CatalogoAzioni.Soglia);
     }
 
-    static ImpostazioniUtente Impostazioni(string radice)
+    [Fact]
+    public async Task Le_frasi_di_tutti_i_giorni_non_aprono_una_conferma()
     {
-        var imp = new ImpostazioniUtente { PercorsoFile = Path.Combine(radice, "impostazioni.json") };
-        return imp;
-    }
-
-    sealed class RegistaFinto : IRegista
-    {
-        public bool MotorePresente { get; set; }
-        public HashSet<RuoloModello> Presenti { get; } = [];
-        public List<RuoloModello> AccesiLista { get; } = [];
-        public IReadOnlyCollection<RuoloModello> Accesi => AccesiLista;
-        public Func<string, SceltaAzione?>? SuDecidi { get; set; }
-
-        public bool Presente(RuoloModello ruolo) => Presenti.Contains(ruolo);
-        public string Descrizione() => "finto";
-
-        public Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)
+        var radice = Temporanea();
+        var dialogo = new Dialogo(Impostazioni(radice), new Mondo(radice), new Registro(radice), new RegistaFinto(), CatalogoAzioni.Predefinito());
+        foreach (var frase in new[] { "ciao", "CHI SEI", "come stai" })
         {
-            if (ruoli.Distinct().Count() > 2) throw new InvalidOperationException("Mai più di due modelli insieme.");
-            AccesiLista.Clear();
-            AccesiLista.AddRange(ruoli);
-            return Task.FromResult(MotorePresente && ruoli.All(Presente));
+            var esito = await dialogo.Messaggio(frase, CancellationToken.None);
+            Assert.False(esito.ChiestaConferma);
+            Assert.DoesNotContain("sì o no", esito.Testo);
         }
-
-        public Task ScaricaTutto(CancellationToken ct)
-        {
-            AccesiLista.Clear();
-            return Task.CompletedTask;
-        }
-
-        public Task Ferma() => ScaricaTutto(CancellationToken.None);
-
-        public Task<SceltaAzione?> Decidi(string stato, CatalogoAzioni catalogo, CancellationToken ct) =>
-            Task.FromResult(SuDecidi?.Invoke(stato));
-
-        public Task<RispostaChat?> Completa(RichiestaChat richiesta, CancellationToken ct) =>
-            Task.FromResult<RispostaChat?>(new RispostaChat("{}", null));
-
-        public Task<string?> Trascrivi(byte[] wav, CancellationToken ct) => Task.FromResult<string?>("ciao");
-        public Task<byte[]?> Sintetizza(string testo, string voce, CancellationToken ct) => Task.FromResult<byte[]?>(null);
+        var ora = await dialogo.Messaggio("che ore sono", CancellationToken.None);
+        Assert.False(ora.ChiestaConferma);
+        Assert.StartsWith("Sono le ", ora.Testo);
+        var nota = await dialogo.Messaggio("scrivi una nota: pane", CancellationToken.None);
+        Assert.False(nota.ChiestaConferma);
+        Assert.NotNull(nota.FileCreato);
     }
+
+    [Fact]
+    public void Il_si_e_il_no_stanno_anche_in_una_frase_breve()
+    {
+        Assert.True(Testo.ESi("sì"));
+        Assert.True(Testo.ESi("Certo, vai"));
+        Assert.True(Testo.ESi("ok fallo"));
+        Assert.True(Testo.ESi("Non sono sicuro. Sì"));
+        Assert.True(Testo.ENo("lascia stare"));
+        Assert.True(Testo.ENo("no, grazie"));
+        Assert.False(Testo.ESi("no"));
+        Assert.False(Testo.ENo("sì"));
+    }
+
+    [Fact]
+    public void Un_aggiornamento_non_cancella_le_note()
+    {
+        var installazione = Path.Combine(Temporanea(), "Liquidino");
+        var dati = Path.Combine(Temporanea(), "Liquidino-dati");
+        var nota = Path.Combine(installazione, "mondo", "note", "pane.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(nota)!);
+        File.WriteAllText(nota, "comprare il pane");
+        File.WriteAllText(Path.Combine(installazione, "impostazioni.json"), "{\"nomeUtente\":\"Cammo\"}");
+        File.WriteAllText(Path.Combine(installazione, "Liquidino.exe"), "non sono dati");
+        MigrazioneDati.Porta(installazione, dati);
+        Directory.Delete(installazione, true);
+        Assert.Equal("comprare il pane", File.ReadAllText(Path.Combine(dati, "mondo", "note", "pane.md")));
+        Assert.Contains("Cammo", File.ReadAllText(Path.Combine(dati, "impostazioni.json")));
+        Assert.False(File.Exists(Path.Combine(dati, "Liquidino.exe")));
+        MigrazioneDati.Porta(dati, dati);
+        Assert.Equal("comprare il pane", File.ReadAllText(Path.Combine(dati, "mondo", "note", "pane.md")));
+    }
+
+    [Fact]
+    public void Il_registro_e_una_riga_json_per_voce()
+    {
+        var radice = Temporanea();
+        var registro = new Registro(radice);
+        registro.Scrivi("turno", "ricevuto: ciao", "ok", "rispondi", 0.5);
+        var file = Directory.GetFiles(Percorsi.Registro(radice), "*.jsonl").Single();
+        var testo = File.ReadAllText(file).TrimEnd('\n');
+        Assert.DoesNotContain('\n', testo);
+        using var doc = System.Text.Json.JsonDocument.Parse(testo);
+        Assert.Equal(0.5, doc.RootElement.GetProperty("sicurezza").GetDouble(), 3);
+        Assert.Contains("ricevuto: ciao", testo);
+    }
+
+    [Fact]
+    public void Di_notte_aspetta_se_la_chat_e_appena_stata_usata()
+    {
+        var ora = new DateTimeOffset(2026, 11, 3, 23, 1, 0, TimeSpan.Zero);
+        Assert.False(Quiete.PuoAddormentarsi(true, false, ora.AddMinutes(-1), ora));
+        Assert.True(Quiete.PuoAddormentarsi(true, false, ora.AddMinutes(-10), ora));
+        Assert.False(Quiete.PuoAddormentarsi(true, true, ora.AddMinutes(-10), ora));
+        Assert.True(Quiete.PuoScaricare(false, 2, ora.AddMinutes(-10), ora));
+        Assert.False(Quiete.PuoScaricare(false, 2, ora.AddSeconds(-30), ora));
+    }
+
+    [Fact]
+    public void Il_microfono_scarta_la_voce_di_liquidino()
+    {
+        var finestra = new FinestraSilenzio();
+        var ora = new DateTime(2026, 11, 3, 21, 0, 0, DateTimeKind.Utc);
+        Assert.False(finestra.Scarta(ora));
+        finestra.FinoA(ora.AddMilliseconds(500));
+        Assert.True(finestra.Scarta(ora.AddMilliseconds(200)));
+        Assert.False(finestra.Scarta(ora.AddMilliseconds(700)));
+    }
+
+    static string Temporanea() => Aiuti.Temporanea();
+
+    static ImpostazioniUtente Impostazioni(string radice) => Aiuti.Impostazioni(radice);
 }

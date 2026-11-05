@@ -16,6 +16,7 @@ public sealed class Ponte
     public Dialogo Dialogo { get; }
     public CicloAutonomo Ciclo { get; }
     public Microfono Microfono { get; } = new();
+    public ManiWindows Mani { get; } = new();
     public LettoreVoce Lettore { get; } = new();
     public StatoCompagno Stato { get; private set; } = StatoCompagno.Dorme;
     public string? EtichettaAggiornamento { get; private set; }
@@ -26,6 +27,8 @@ public sealed class Ponte
     public event Action? PermessoCambiato;
     public event Action? AscoltoCambiato;
     public event Action<byte[]>? VocePronta;
+    public event Action<string>? Annuncio;
+    public event Action<EsitoDialogo>? Risposto;
     public bool StaAscoltando { get; private set; }
     public FinestraCasa? Casa { get; set; }
     public ComandiLocali Comandi { get; } = new();
@@ -42,16 +45,25 @@ public sealed class Ponte
         Mondo = new Mondo();
         Registro = new Registro();
         Regista = new Regista(impostazioni, Registro);
-        Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()));
+        Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()), Mani);
         Ciclo = new CicloAutonomo(impostazioni, Mondo, Registro, Regista);
         Lettore.Finito += () =>
         {
+            Microfono.SilenziaFino(DateTime.UtcNow.AddMilliseconds(500));
             if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
         };
     }
 
+    DateTimeOffset _ultimoGesto = DateTimeOffset.Now;
+
+    public void SegnaGesto() => _ultimoGesto = DateTimeOffset.Now;
+
+    public bool StaLavorando =>
+        StaAscoltando || Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla;
+
     public void AvviaOrologi()
     {
+        _ = Task.Run(Mani.Prepara);
         _ciclo = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti) };
         _ciclo.Tick += async (_, _) =>
         {
@@ -63,7 +75,7 @@ public sealed class Ponte
         _notte = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _notte.Tick += async (_, _) =>
         {
-            try { await ControllaNotte(); }
+            try { await ControllaQuiete(); }
             catch { /* la notte si ricontrolla fra un minuto */ }
         };
         _notte.Start();
@@ -102,7 +114,7 @@ public sealed class Ponte
         SulFiloUi(() => AscoltoCambiato?.Invoke());
         if (Stato is StatoCompagno.Pensa or StatoCompagno.Ascolta or StatoCompagno.Parla)
             ImpostaStato(StatoCompagno.Sveglio);
-        _ = Task.Run(() => Registro.Scrivi("annulla", "turno interrotto", "ok"));
+        _ = Task.Run(() => Registro.Scrivi("annulla", "turno interrotto: STOP o Esc, il caricamento viene fermato", "annullato"));
     }
 
     /// <summary>Ritorna subito. Si può premere più volte: non aspetta il motore e non blocca la finestra.</summary>
@@ -137,6 +149,7 @@ public sealed class Ponte
     async Task ApriAscoltoAsync()
     {
         if (StaAscoltando) return;
+        SegnaGesto();
         try
         {
             await Task.Run(() => Microfono.Inizia()).ConfigureAwait(false);
@@ -171,6 +184,7 @@ public sealed class Ponte
     public async Task<EsitoDialogo> Messaggio(string testo)
     {
         var ct = Token();
+        SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
         try
         {
@@ -180,14 +194,22 @@ public sealed class Ponte
         }
         catch (OperationCanceledException)
         {
-            ImpostaStato(StatoCompagno.Dorme);
-            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Dorme, false, false, false, false, false, null, null);
+            return TurnoAnnullato();
         }
+    }
+
+    EsitoDialogo TurnoAnnullato()
+    {
+        var testo = "Turno annullato: è stato premuto STOP o Esc. Se il modello non era già pronto, non l'ho caricato.";
+        ImpostaStato(StatoCompagno.Dorme);
+        SulFiloUi(() => Annuncio?.Invoke(testo));
+        return new EsitoDialogo(testo, StatoCompagno.Dorme, false, false, true, false, false, null, null);
     }
 
     public async Task<EsitoDialogo> DaAudio(byte[] wav)
     {
         var ct = Token();
+        SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
         try
         {
@@ -197,14 +219,14 @@ public sealed class Ponte
         }
         catch (OperationCanceledException)
         {
-            ImpostaStato(StatoCompagno.Dorme);
-            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Dorme, false, false, false, false, false, null, null);
+            return TurnoAnnullato();
         }
     }
 
     public async Task<EsitoDialogo> Guarda(string percorso)
     {
         var ct = Token();
+        SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
         try
         {
@@ -214,14 +236,28 @@ public sealed class Ponte
         }
         catch (OperationCanceledException)
         {
-            ImpostaStato(StatoCompagno.Sveglio);
-            return new EsitoDialogo("Mi sono fermato.", StatoCompagno.Sveglio, false, false, false, false, false, null, null);
+            return TurnoAnnullato();
         }
+    }
+
+    public void Annuncia(string testo)
+    {
+        if (string.IsNullOrWhiteSpace(testo)) return;
+        SulFiloUi(() => Annuncio?.Invoke(testo));
+    }
+
+    public void SegnaAvvio()
+    {
+        var testo = Regista.Riassunto();
+        Registro.Scrivi("avvio", testo, "ok");
+        if (!Regista.MotorePresente || (!Regista.Presente(RuoloModello.Mani) && !Regista.Presente(RuoloModello.Omni)))
+            Annuncia("Questo fallo tu: " + testo + ". Senza questi file non posso caricare un modello.");
     }
 
     async Task Dopo(EsitoDialogo esito, CancellationToken ct)
     {
         if (esito.FileCreato is not null || esito.MostraMondo) SulFiloUi(() => MondoCambiato?.Invoke());
+        SulFiloUi(() => Risposto?.Invoke(esito));
         if (esito.VuoiVoce && esito.Testo.Length > 0 && !ct.IsCancellationRequested)
             await Parla(esito.Testo, ct);
         if (esito.ScaricaDopo)
@@ -236,23 +272,47 @@ public sealed class Ponte
         _turni++;
     }
 
+    /// <summary>
+    /// Legge la frase: Omni se c'è, altrimenti (o se la sua voce non esce) le voci italiane di Windows.
+    /// Se non esce niente torna sveglio: non resta fermo nello stato «parla».
+    /// </summary>
     public async Task Parla(string testo, CancellationToken ct)
     {
-        if (!Regista.Presente(RuoloModello.Omni) || !Regista.MotorePresente) return;
+        var frase = TagliaPerVoce(testo);
+        var motore = SceltaVoce.Scegli(Regista.MotorePresente, Regista.Presente(RuoloModello.Omni), Impostazioni.VoceWindows, VoceWindows.Disponibile);
+        if (motore == MotoreVoce.Nessuno || frase.Length == 0) return;
+        var suona = false;
         try
         {
             ImpostaStato(StatoCompagno.Parla);
-            var bytes = await Regista.Sintetizza(TagliaPerVoce(testo), Impostazioni.Voce, ct);
-            if (bytes is null || bytes.Length < 44) return;
-            var path = Path.Combine(Path.GetTempPath(), "liquidino-voce.wav");
+            byte[]? bytes = null;
+            if (motore == MotoreVoce.Omni)
+            {
+                try { bytes = await Regista.Sintetizza(frase, Impostazioni.Voce, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception e) { Registro.SegnaErrore("voce di Omni: " + e.Message); }
+                if (bytes is not { Length: >= 44 })
+                    motore = SceltaVoce.DopoErrore(Impostazioni.VoceWindows, VoceWindows.Disponibile);
+            }
+            if (motore == MotoreVoce.Windows)
+                bytes = await Task.Run(() => VoceWindows.Sintetizza(frase, Impostazioni.Voce), ct);
+            if (bytes is not { Length: >= 44 }) return;
+            Lettore.Ferma();
+            var path = Path.Combine(Path.GetTempPath(), "liquidino-voce-" + Guid.NewGuid().ToString("N") + ".wav");
             await File.WriteAllBytesAsync(path, bytes, ct);
+            Microfono.SilenziaFino(DateTime.UtcNow.AddMinutes(2));
             Lettore.Suona(path);
+            suona = true;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e)
         {
             Registro.SegnaErrore("voce: " + e.Message);
-            if (Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
+        }
+        finally
+        {
+            // Mentre suona, lo stato torna sveglio quando il lettore finisce.
+            if (!suona && Stato == StatoCompagno.Parla) ImpostaStato(StatoCompagno.Sveglio);
         }
     }
 
@@ -273,16 +333,155 @@ public sealed class Ponte
         finally { _cicloInCorso = false; }
     }
 
-    async Task ControllaNotte()
+    async Task ControllaQuiete()
     {
-        if (!Impostazioni.ENotte(DateTimeOffset.Now)) return;
-        if (Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla) return;
-        if (Regista.Accesi.Count == 0 && Stato == StatoCompagno.Dorme) return;
-        Lettore.Ferma();
-        Dialogo.DimenticaSessione();
-        await Regista.ScaricaTutto(CancellationToken.None);
-        ImpostaStato(StatoCompagno.Dorme);
-        Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
+        var ora = DateTimeOffset.Now;
+        var lavora = StaLavorando;
+        if (Quiete.PuoAddormentarsi(Impostazioni.ENotte(ora), lavora, _ultimoGesto, ora))
+        {
+            if (Regista.Accesi.Count == 0 && Stato == StatoCompagno.Dorme) return;
+            Lettore.Ferma();
+            Dialogo.DimenticaSessione();
+            await Regista.ScaricaTutto(CancellationToken.None);
+            ImpostaStato(StatoCompagno.Dorme);
+            Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
+            ScriviDiario(ora);
+            return;
+        }
+        if (Quiete.PuoScaricare(lavora, Regista.Accesi.Count, _ultimoGesto, ora))
+        {
+            await Regista.ScaricaTutto(CancellationToken.None);
+            Registro.Scrivi("motore", "inattività: modelli scaricati", "ok");
+        }
+    }
+
+    /// <summary>Il diario della giornata appena finita, quando va a dormire. Un errore qui non sveglia nessuno.</summary>
+    void ScriviDiario(DateTimeOffset ora)
+    {
+        try
+        {
+            var giorno = Diario.GiornoDaRaccontare(ora, Impostazioni.OraNotteFine);
+            var percorso = Diario.Scrivi(Mondo, giorno, ora);
+            Registro.Scrivi("diario", Path.GetFileName(percorso), "ok");
+            SulFiloUi(() => MondoCambiato?.Invoke());
+        }
+        catch (Exception e) { Registro.SegnaErrore("diario: " + e.Message); }
+    }
+
+    /// <summary>Rifà un pensiero con la tua indicazione. STOP o Esc lo fermano.</summary>
+    public async Task<EsitoCiclo> Rifai(string percorso, string indicazione)
+    {
+        SegnaGesto();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await Ciclo.Rifai(percorso, indicazione, Token());
+            if (esito.Fatto) SulFiloUi(() => MondoCambiato?.Invoke());
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            return new EsitoCiclo(false, "è stato premuto STOP o Esc, quindi non l'ho rifatto", null, null, false);
+        }
+        finally
+        {
+            if (Stato == StatoCompagno.Pensa) ImpostaStato(StatoCompagno.Sveglio);
+        }
+    }
+
+    /// <summary>Il pensiero chiesto da te. Non lancia eccezioni: dal tasto non deve uscire la finestra d'errore.</summary>
+    public async Task PensieroAdesso()
+    {
+        SegnaGesto();
+        if (_cicloInCorso)
+        {
+            Annuncia("Sto già scrivendo un pensiero.");
+            return;
+        }
+        _cicloInCorso = true;
+        var ct = Token();
+        try
+        {
+            ImpostaStato(StatoCompagno.Pensa);
+            var esito = await Ciclo.Gira(DateTimeOffset.Now, false, ct, richiesto: true);
+            if (!esito.Fatto || esito.Testo is null)
+            {
+                Annuncia(string.IsNullOrWhiteSpace(esito.Motivo) ? "Adesso non ho un pensiero." : "Adesso non scrivo: " + esito.Motivo + ".");
+                return;
+            }
+            SulFiloUi(() =>
+            {
+                MondoCambiato?.Invoke();
+                Pensiero?.Invoke(esito.Testo);
+            });
+            if (esito.Parla) await Parla(esito.Testo, ct);
+        }
+        catch (OperationCanceledException) { Annuncia("Mi sono fermato: STOP o Esc."); }
+        catch (Exception e)
+        {
+            Registro.SegnaErrore("pensiero: " + e.Message);
+            Annuncia("Questo fallo tu: il pensiero non è uscito. " + e.Message);
+        }
+        finally
+        {
+            _cicloInCorso = false;
+            if (Stato == StatoCompagno.Pensa) ImpostaStato(StatoCompagno.Sveglio);
+        }
+    }
+
+    /// <summary>
+    /// La prova di carico vera: per ogni gradino riaccende il motore con quel contesto e lo riempie al 90%.
+    /// Tiene il primo che regge. Se nessuno regge, o premi STOP, rimette il contesto di prima.
+    /// </summary>
+    public async Task<EsitoProvaContesto> ProvaContestoVera(Action<string> passo)
+    {
+        if (!Regista.MotorePresente || !Regista.Presente(RuoloModello.Mani))
+            return new EsitoProvaContesto(false, 0, 0, null, ["Per la prova servono llama-server e LFM3-1.7B nella cartella del motore."]);
+        void Passo(string testo) => SulFiloUi(() => passo(testo));
+        SegnaGesto();
+        var prima = Impostazioni.ContestoMani;
+        var ct = Token();
+        ImpostaStato(StatoCompagno.Pensa);
+        try
+        {
+            var esito = await ProvaContesto.Esegui(SceltaContesto.ObiettivoMani, async (contesto, t) =>
+            {
+                Impostazioni.ContestoMani = contesto;
+                await RicaricaMotore().ConfigureAwait(false);
+                SegnaGesto();
+                return await Regista.ProvaRiempimento(ProvaContesto.Obiettivo(contesto), t).ConfigureAwait(false);
+            }, Passo, ct);
+            if (esito.Riuscita)
+            {
+                Impostazioni.ContestoMani = esito.Contesto;
+                Impostazioni.FraseContesto = esito.Frase();
+                await Task.Run(Impostazioni.Salva);
+            }
+            else
+            {
+                Impostazioni.ContestoMani = prima;
+                await RicaricaMotore();
+            }
+            Registro.Scrivi("contesto", esito.Frase(), esito.Riuscita ? "ok" : "errore");
+            return esito;
+        }
+        catch (OperationCanceledException)
+        {
+            Impostazioni.ContestoMani = prima;
+            try { await RicaricaMotore(); } catch { /* il motore ripartirà al prossimo messaggio */ }
+            return new EsitoProvaContesto(false, 0, 0, null, ["Prova fermata con STOP o Esc: ho rimesso il contesto di prima."]);
+        }
+        catch (Exception e)
+        {
+            Impostazioni.ContestoMani = prima;
+            Registro.SegnaErrore("prova di carico: " + e.Message);
+            try { await RicaricaMotore(); } catch { /* il motore ripartirà al prossimo messaggio */ }
+            return new EsitoProvaContesto(false, 0, 0, null, ["La prova si è interrotta: " + e.Message]);
+        }
+        finally
+        {
+            if (Stato == StatoCompagno.Pensa) ImpostaStato(StatoCompagno.Sveglio);
+        }
     }
 
     public async Task RicaricaMotore()
@@ -299,14 +498,24 @@ public sealed class Ponte
         });
     }
 
-    public void Chiudi()
+    int _spento;
+
+    /// <summary>Chiude timer, microfono e llama-server. Se non risponde entro 4 secondi, kill dell'albero.</summary>
+    public void Spegni()
     {
+        if (Interlocked.Exchange(ref _spento, 1) == 1) return;
         _ciclo?.Stop();
         _notte?.Stop();
         try { _cts.Cancel(); } catch { /* già annullato */ }
         try { Microfono.Dispose(); } catch { /* il microfono può essere già chiuso */ }
         try { Lettore.Dispose(); } catch { /* il lettore può essere già chiuso */ }
-        try { Regista.UccidiSubito(); } catch { /* in chiusura non si insiste */ }
+        try
+        {
+            var compito = Task.Run(() => Regista.Ferma());
+            if (!compito.Wait(TimeSpan.FromSeconds(4)))
+                Regista.UccidiSubito();
+        }
+        catch { Regista.UccidiSubito(); }
     }
 
     public string RigaStato()

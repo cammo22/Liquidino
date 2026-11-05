@@ -26,6 +26,29 @@ public sealed class FinestraCasa : Window
         FontSize = 15
     };
     readonly Button _parla;
+    readonly ComboBox _cartella = new() { FontFamily = Stile.Testo, FontSize = 14, MinWidth = 96 };
+    readonly TextBox _cerca = Stile.Campo("cerca");
+    readonly Button _vista;
+    readonly Border _anteprima = new()
+    {
+        Height = 150,
+        Margin = new Thickness(8, 4, 8, 0),
+        Padding = new Thickness(8, 6, 8, 6),
+        CornerRadius = new CornerRadius(8),
+        Background = Stile.Carta,
+        BorderBrush = Stile.Pennello("#3a3648"),
+        BorderThickness = new Thickness(1)
+    };
+    readonly TextBlock _testoAnteprima = new()
+    {
+        FontFamily = Stile.Testo,
+        FontSize = 14,
+        Foreground = Stile.Inchiostro2,
+        TextWrapping = TextWrapping.Wrap,
+        Text = "Scegli un file per vederne l'inizio."
+    };
+    bool _iconeGrandi;
+    string? _rifacimentoDi;
     bool _occupato;
 
     public FinestraCasa(Ponte ponte, FinestraAvatar avatar)
@@ -92,7 +115,15 @@ public sealed class FinestraCasa : Window
         _input.KeyDown += async (_, e) =>
         {
             if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None) { e.Handled = true; await Invia(); }
-            else if (e.Key == Key.Escape) _ponte.Annulla();
+            else if (e.Key == Key.Escape)
+            {
+                if (_rifacimentoDi is not null)
+                {
+                    _rifacimentoDi = null;
+                    Aggiungi("Liquidino", "Va bene, lo lascio com'è.", false);
+                }
+                else _ponte.Annulla();
+            }
         };
         var invia = Stile.Bottone("Invia", principale: true);
         invia.Click += async (_, _) => await Invia();
@@ -116,33 +147,64 @@ public sealed class FinestraCasa : Window
         chat.Children.Add(rigaInput);
         chat.Children.Add(_scorrimento);
 
-        var mondo = new DockPanel { Background = Stile.Carta2, Width = 320 };
-        var testaMondo = new StackPanel { Margin = new Thickness(12, 10, 12, 6) };
+        var mondo = new DockPanel { Background = Stile.Carta2, Width = 340 };
+        var testaMondo = new StackPanel { Margin = new Thickness(12, 10, 12, 4) };
         testaMondo.Children.Add(new TextBlock { Text = "IL MIO MONDO", FontFamily = Stile.Marchio, FontSize = 13, Foreground = Stile.OroP });
-        testaMondo.Children.Add(Stile.Riga("Note, idee e memoria. Si possono cancellare.", secondario: true));
+        testaMondo.Children.Add(Stile.Riga("Note, idee, diario e memoria. Si possono cancellare.", secondario: true));
+        var filtri = new DockPanel { Margin = new Thickness(0, 6, 0, 0), LastChildFill = true };
+        foreach (var c in FiltroMondo.Scelte) _cartella.Items.Add(c);
+        _cartella.SelectedIndex = 0;
+        _cartella.SelectionChanged += (_, _) => RiempiMondo();
+        DockPanel.SetDock(_cartella, Dock.Left);
+        _vista = Stile.Icona("▦", "Icone grandi o elenco.");
+        _vista.Click += (_, _) => { _iconeGrandi = !_iconeGrandi; RiempiMondo(); };
+        DockPanel.SetDock(_vista, Dock.Right);
+        _cerca.Margin = new Thickness(6, 0, 0, 0);
+        _cerca.FontSize = 15;
+        _cerca.Padding = new Thickness(6, 3, 6, 3);
+        _cerca.TextChanged += (_, _) => RiempiMondo();
+        filtri.Children.Add(_cartella);
+        filtri.Children.Add(_vista);
+        filtri.Children.Add(_cerca);
+        testaMondo.Children.Add(filtri);
         DockPanel.SetDock(testaMondo, Dock.Top);
-        var tastiMondo = new WrapPanel { Margin = new Thickness(8) };
-        var aggiorna = Stile.Bottone("Aggiorna");
+
+        var tastiMondo = new WrapPanel { Margin = new Thickness(8, 4, 8, 8) };
+        var aggiorna = Stile.Icona("⟳", "Aggiorna l'elenco.");
         aggiorna.Click += (_, _) => RiempiMondo();
-        var apri = Stile.Bottone("Apri cartella");
-        apri.Click += (_, _) => Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = "\"" + _ponte.Mondo.Radice + "\"", UseShellExecute = true });
-        var cestino = Stile.Bottone("Nel cestino");
+        var apri = Stile.Icona("📂", "Apri la cartella del mondo.");
+        apri.Click += (_, _) => Apri(_ponte.Mondo.Radice);
+        var apriFile = Stile.Icona("📄", "Apri il file scelto col suo programma.");
+        apriFile.Click += (_, _) => { if (Scelto() is { } f) Apri(f); };
+        var piace = Stile.Icona("👍", "Mi piace: i pensieri nuovi gli somiglieranno.");
+        piace.Click += (_, _) => Vota(1);
+        var rifai = Stile.Icona("👎", "Non mi piace: dimmi cosa cambiare e lo rifaccio.");
+        rifai.Click += (_, _) => ChiediRifacimento();
+        var cestino = Stile.Icona("🗑", "Nel cestino.");
         cestino.Click += (_, _) => MettiNelCestino();
-        var pensiero = Stile.Bottone("Un pensiero adesso");
+        var pensiero = Stile.Icona("💭", "Un pensiero adesso.");
         pensiero.Click += async (_, _) =>
         {
             Aggiungi("Liquidino", "Ci penso un attimo.", false);
-            await _ponte.CicloOrario();
+            await _ponte.PensieroAdesso();
             RiempiMondo();
             AggiornaStato();
         };
-        tastiMondo.Children.Add(aggiorna);
-        tastiMondo.Children.Add(apri);
-        tastiMondo.Children.Add(cestino);
-        tastiMondo.Children.Add(pensiero);
+        var diario = Stile.Icona("📔", "Il diario di oggi: i conti della giornata.");
+        diario.Click += (_, _) => DiarioDiOggi();
+        foreach (var t in new[] { aggiorna, apri, apriFile, piace, rifai, cestino, pensiero, diario })
+            tastiMondo.Children.Add(t);
         DockPanel.SetDock(tastiMondo, Dock.Bottom);
+
+        _anteprima.Child = new ScrollViewer { Content = _testoAnteprima, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        DockPanel.SetDock(_anteprima, Dock.Bottom);
+        _lista.SelectionChanged += (_, _) => MostraAnteprima();
+        _lista.MouseDoubleClick += (_, _) => { if (Scelto() is { } f) Apri(f); };
+        ScrollViewer.SetHorizontalScrollBarVisibility(_lista, ScrollBarVisibility.Disabled);
+
         mondo.Children.Add(testaMondo);
         mondo.Children.Add(tastiMondo);
+        mondo.Children.Add(_anteprima);
         mondo.Children.Add(_lista);
 
         _stato = new TextBlock
@@ -182,6 +244,16 @@ public sealed class FinestraCasa : Window
         ponte.MondoCambiato += () => SulFilo(RiempiMondo);
         ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
         ponte.Pensiero += testo => SulFilo(() => Aggiungi("Liquidino", testo, false));
+        ponte.Annuncio += testo => SulFilo(() => Aggiungi("Liquidino", testo, false));
+        ponte.Risposto += esito => SulFilo(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(esito.Trascrizione))
+                Aggiungi("tu", esito.Trascrizione, true);
+            if (!string.IsNullOrWhiteSpace(esito.Testo))
+                Aggiungi("Liquidino", esito.Testo, false);
+            if (esito.MostraMondo) RiempiMondo();
+            AggiornaStato();
+        });
         Loaded += (_, _) => SistemaPosizione();
         RiempiMondo();
         AggiornaStato();
@@ -230,6 +302,23 @@ public sealed class FinestraCasa : Window
         }
     }
 
+    /// <summary>Per la prova di avvio: passa da tutte le viste del pannello del mondo.</summary>
+    internal void EsercitaPannello()
+    {
+        _iconeGrandi = true;
+        RiempiMondo();
+        if (_lista.Items.Count > 0) _lista.SelectedIndex = 0;
+        MostraAnteprima();
+        _cerca.Text = "prova";
+        RiempiMondo();
+        _cerca.Text = "";
+        _iconeGrandi = false;
+        RiempiMondo();
+        DiarioDiOggi();
+        if (!_testoAnteprima.Text.Contains("Diario", StringComparison.Ordinal))
+            throw new InvalidOperationException("l'anteprima del diario non si vede: " + _testoAnteprima.Text);
+    }
+
     public void MostraCreazioni()
     {
         Show();
@@ -264,7 +353,35 @@ public sealed class FinestraCasa : Window
         _input.Text = "";
         _input.Foreground = Stile.Inchiostro;
         Aggiungi("tu", testo, true);
+        if (_rifacimentoDi is { } daRifare)
+        {
+            _rifacimentoDi = null;
+            await Rifai(daRifare, testo);
+            return;
+        }
         await Gira(() => _ponte.Messaggio(testo));
+    }
+
+    async Task Rifai(string percorso, string indicazione)
+    {
+        if (_occupato) return;
+        _occupato = true;
+        try
+        {
+            Aggiungi("Liquidino", "Lo riscrivo. Il pensiero di prima va nel cestino, non si perde.", false);
+            var esito = await _ponte.Rifai(percorso, indicazione);
+            Aggiungi("Liquidino", esito.Fatto && esito.Testo is not null ? esito.Testo : Testo.FalloTu(esito.Motivo), false);
+            RiempiMondo();
+        }
+        catch (Exception e)
+        {
+            _ponte.Annuncia("Questo fallo tu: non sono riuscito a rifarlo. " + e.Message);
+        }
+        finally
+        {
+            _occupato = false;
+            AggiornaStato();
+        }
     }
 
     async Task Gira(Func<Task<EsitoDialogo>> lavoro)
@@ -273,16 +390,13 @@ public sealed class FinestraCasa : Window
         _occupato = true;
         try
         {
-            var esito = await lavoro();
-            if (!string.IsNullOrWhiteSpace(esito.Trascrizione))
-                Aggiungi("tu", esito.Trascrizione, true);
-            Aggiungi("Liquidino", esito.Testo, false);
-            if (esito.MostraMondo) RiempiMondo();
+            await lavoro();
         }
         catch (Exception e)
         {
             _ponte.Registro.SegnaErrore(e.Message);
-            Aggiungi("Liquidino", "Questo fallo tu: " + e.Message, false);
+            // L'annuncio arriva anche qui in chat, oltre che nel fumetto.
+            _ponte.Annuncia("Questo fallo tu: " + e.Message);
         }
         finally
         {
@@ -293,18 +407,144 @@ public sealed class FinestraCasa : Window
 
     void RiempiMondo()
     {
+        var scelto = Scelto();
         _lista.Items.Clear();
-        foreach (var v in _ponte.Mondo.Elenca())
+        _lista.ItemsPanel = _iconeGrandi ? PannelloIcone : PannelloElenco;
+        _vista.Content = _iconeGrandi ? "☰" : "▦";
+        IReadOnlyList<VoceMondo> voci;
+        try
         {
-            _lista.Items.Add(new ListBoxItem
+            voci = FiltroMondo.Applica(_ponte.Mondo.Elenca(), _cartella.SelectedItem as string, Stile.TestoCampo(_cerca));
+        }
+        catch (Exception e)
+        {
+            _testoAnteprima.Text = "Non riesco a leggere il mondo: " + e.Message;
+            return;
+        }
+        var voti = _ponte.Ciclo.Voti;
+        foreach (var v in voci)
+        {
+            var voto = VotiMondo.SiVota(v) ? voti.Voto(v.Percorso) : null;
+            var segno = voto switch { > 0 => "👍 ", < 0 => "👎 ", _ => "" };
+            var titolo = Mondo.TitoloDi(v.Nome);
+            var voce = new ListBoxItem
             {
-                Content = v.Cartella + "   " + v.Nome,
                 Tag = v.Percorso,
                 Foreground = Stile.Inchiostro,
                 FontFamily = Stile.Testo,
                 FontSize = 15,
-                Padding = new Thickness(8, 3, 8, 3)
-            });
+                ToolTip = v.Cartella + "/" + v.Nome + " · " + v.Quando.ToString("dd/MM HH:mm")
+            };
+            if (_iconeGrandi)
+            {
+                var pila = new StackPanel { Width = 92, Margin = new Thickness(2) };
+                pila.Children.Add(new TextBlock { Text = Simbolo(v.Cartella), FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol"), FontSize = 30, HorizontalAlignment = HorizontalAlignment.Center });
+                pila.Children.Add(new TextBlock { Text = segno + titolo, FontFamily = Stile.Testo, FontSize = 13, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, MaxHeight = 52, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Stile.Inchiostro });
+                voce.Content = pila;
+                voce.Padding = new Thickness(2);
+            }
+            else
+            {
+                voce.Content = Simbolo(v.Cartella) + "  " + segno + titolo + "   " + v.Quando.ToString("dd/MM HH:mm");
+                voce.Padding = new Thickness(8, 3, 8, 3);
+            }
+            _lista.Items.Add(voce);
+            if (scelto is not null && string.Equals(scelto, v.Percorso, StringComparison.OrdinalIgnoreCase))
+                _lista.SelectedItem = voce;
+        }
+        if (_lista.SelectedItem is null) MostraAnteprima();
+    }
+
+    static readonly ItemsPanelTemplate PannelloElenco = new(new FrameworkElementFactory(typeof(StackPanel)));
+    static readonly ItemsPanelTemplate PannelloIcone = new(new FrameworkElementFactory(typeof(WrapPanel)));
+
+    static string Simbolo(string cartella) => cartella switch
+    {
+        "note" => "📝",
+        "storie" => "📖",
+        "idee" => "💡",
+        "per-cammo" => "🎁",
+        "diario" => "📔",
+        "memoria" => "🧠",
+        "cestino" => "🗑",
+        "registro" => "📜",
+        _ => "📄"
+    };
+
+    string? Scelto() => _lista.SelectedItem is ListBoxItem { Tag: string percorso } ? percorso : null;
+
+    void MostraAnteprima()
+    {
+        var percorso = Scelto();
+        if (percorso is null)
+        {
+            _testoAnteprima.Text = _lista.Items.Count == 0 ? "Qui non c'è niente." : "Scegli un file per vederne l'inizio.";
+            return;
+        }
+        _testoAnteprima.Text = _ponte.Mondo.Anteprima(percorso) ?? "Il file non c'è più.";
+    }
+
+    void Apri(string percorso)
+    {
+        if (!Percorsi.StaDentro(_ponte.Mondo.Radice, percorso) || (!File.Exists(percorso) && !Directory.Exists(percorso)))
+        {
+            Aggiungi("Liquidino", "Questo fallo tu: quel file non sta nel mio mondo, non lo apro.", false);
+            return;
+        }
+        try
+        {
+            var info = Directory.Exists(percorso)
+                ? new ProcessStartInfo { FileName = "explorer.exe", Arguments = "\"" + percorso + "\"", UseShellExecute = true }
+                : new ProcessStartInfo { FileName = percorso, UseShellExecute = true };
+            using (Process.Start(info)) { }
+        }
+        catch (Exception e)
+        {
+            Aggiungi("Liquidino", "Questo fallo tu: Windows non ha un programma per aprirlo. " + e.Message, false);
+        }
+    }
+
+    void Vota(int voto)
+    {
+        if (Scelto() is not { } percorso) return;
+        if (!_ponte.Ciclo.Voti.Vota(percorso, voto))
+        {
+            Aggiungi("Liquidino", "Questo fallo tu: quel file non si può votare.", false);
+            return;
+        }
+        _ponte.Registro.Scrivi("voto", (voto > 0 ? "mi piace: " : "non mi piace: ") + Path.GetFileName(percorso), "ok");
+        RiempiMondo();
+    }
+
+    void ChiediRifacimento()
+    {
+        if (Scelto() is not { } percorso) return;
+        Vota(-1);
+        var cartella = Path.GetFileName(Path.GetDirectoryName(percorso));
+        if (cartella is not ("idee" or "storie"))
+        {
+            Aggiungi("Liquidino", "Segnato. Rifaccio solo i miei pensieri e le storie, non le note che mi hai dettato.", false);
+            return;
+        }
+        _rifacimentoDi = percorso;
+        Aggiungi("Liquidino", "Che cosa cambio in «" + Mondo.TitoloDi(Path.GetFileName(percorso)) + "»? Scrivilo qui sotto e premi Invio. Esc per lasciar stare.", false);
+        _input.Focus();
+    }
+
+    void DiarioDiOggi()
+    {
+        try
+        {
+            var percorso = Diario.Scrivi(_ponte.Mondo, DateOnly.FromDateTime(DateTime.Now), DateTimeOffset.Now);
+            _ponte.Registro.Scrivi("diario", Path.GetFileName(percorso), "ok");
+            _cartella.SelectedItem = "diario";
+            RiempiMondo();
+            foreach (var v in _lista.Items.OfType<ListBoxItem>())
+                if (v.Tag is string p && string.Equals(p, percorso, StringComparison.OrdinalIgnoreCase)) _lista.SelectedItem = v;
+        }
+        catch (Exception e)
+        {
+            Aggiungi("Liquidino", "Questo fallo tu: non sono riuscito a scrivere il diario. " + e.Message, false);
         }
     }
 

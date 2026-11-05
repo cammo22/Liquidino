@@ -38,5 +38,16 @@ try {
   if (-not $setup) { throw "Manca il Setup di Velopack" }
   Copy-Item $setup.FullName (Join-Path $uscite "Liquidino-Setup.exe") -Force
   Get-ChildItem $uscite -Filter "*Portable.zip" -ErrorAction SilentlyContinue | Remove-Item -Force
+  $portatile = Join-Path $uscite "Liquidino-portatile.zip"
+  if (Test-Path $portatile) { Remove-Item $portatile -Force }
+  Compress-Archive -Path (Join-Path $radice "pubblicato\*") -DestinationPath $portatile
+  # Le impronte dei file che vanno nella release (gli stessi di pubblica-release.ps1: il Setup e gli aggiornamenti, niente zip),
+  # per controllare con Get-FileHash che il Setup scaricato sia quello giusto.
+  $impronte = Get-ChildItem $uscite -File | Where-Object {
+    $_.Name -eq "Liquidino-Setup.exe" -or ($_.Extension -ne ".zip" -and $_.Name -notlike "*-Setup.exe" -and $_.Name -ne "SHA256SUMS.txt")
+  } | Sort-Object Name | ForEach-Object {
+    (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + "  " + $_.Name
+  }
+  [IO.File]::WriteAllText((Join-Path $uscite "SHA256SUMS.txt"), (($impronte -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
   Get-ChildItem $uscite | Format-Table Name, @{ n = "MB"; e = { [math]::Round($_.Length / 1MB, 1) } } -AutoSize
 } finally { Pop-Location }

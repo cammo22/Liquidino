@@ -41,34 +41,51 @@ public static class Testo
         return pulito;
     }
 
-    public static bool ESi(string testo)
+    public static string OraLocale(DateTimeOffset ora)
     {
-        var t = Normalizza(testo);
-        return t is "sì" or "si" or "ok" or "va bene" or "sì grazie" or "si grazie" or "dai" or "fallo" or "certo" or "yes";
+        var it = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
+        return "Sono le " + ora.ToString("HH:mm", it) + " di " + ora.ToString("dddd d MMMM yyyy", it) + ".";
     }
 
-    public static bool ENo(string testo)
+    /// <summary>Sì anche dentro una frase breve: «certo, vai», «ok fallo», «… Sì».</summary>
+    public static bool ESi(string testo) => Verdetto(testo) > 0;
+
+    /// <summary>No anche dentro una frase breve: «no grazie», «lascia stare».</summary>
+    public static bool ENo(string testo) => Verdetto(testo) < 0;
+
+    static int Verdetto(string testo)
     {
-        var t = Normalizza(testo);
-        return t is "no" or "niente" or "lascia stare" or "lascia perdere" or "annulla" or "no grazie";
+        var parole = Parole(testo);
+        if (parole.Count == 0 || parole.Count > 12) return 0;
+        var ultimo = 0;
+        for (var i = 0; i < parole.Count; i++)
+        {
+            if (i + 1 < parole.Count && Frase(parole, i, "lascia", "stare", "perdere")) { ultimo = -1; i++; continue; }
+            if (i + 1 < parole.Count && Frase(parole, i, "va", "bene")) { ultimo = 1; i++; continue; }
+            if (i + 1 < parole.Count && Frase(parole, i, "no", "grazie")) { ultimo = -1; i++; continue; }
+            if (i + 1 < parole.Count && (Frase(parole, i, "sì", "grazie") || Frase(parole, i, "si", "grazie"))) { ultimo = 1; i++; continue; }
+            if (parole[i] is "no" or "niente" or "annulla") ultimo = -1;
+            else if (parole[i] is "sì" or "si" or "certo" or "ok" or "vai" or "fallo" or "dai" or "yes") ultimo = 1;
+        }
+        return ultimo;
     }
 
-    /// <summary>Chiede di usare mouse, tastiera o altri programmi: nel prototipo non si fa.</summary>
-    public static bool ChiedeIlPc(string testo)
+    static bool Frase(List<string> parole, int i, string prima, string seconda, string? secondaAlt = null) =>
+        parole[i] == prima && (parole[i + 1] == seconda || (secondaAlt is not null && parole[i + 1] == secondaAlt));
+
+    static List<string> Parole(string testo)
     {
-        var s = (testo ?? "").ToLowerInvariant();
-        string[] chiavi =
-        [
-            "clicca", "muovi il mouse", "sposta il mouse", "apri il programma", "usa il pc",
-            "usa il computer", "premi il tasto", "scrivi al posto mio", "controlla il desktop",
-            "apri esplora", "lancia "
-        ];
-        return chiavi.Any(s.Contains);
+        var lista = new List<string>();
+        var cur = new System.Text.StringBuilder();
+        foreach (var c in (testo ?? "").ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(c)) cur.Append(c);
+            else if (cur.Length > 0) { lista.Add(cur.ToString()); cur.Clear(); }
+        }
+        if (cur.Length > 0) lista.Add(cur.ToString());
+        return lista;
     }
 
-    static string Normalizza(string testo)
-    {
-        var t = (testo ?? "").Trim().TrimEnd('.', '!', '?').ToLowerInvariant();
-        return t.Replace("'", "'").Trim();
-    }
+    /// <summary>Chiede qualcosa sul PC (un gesto delle mani, fattibile o no). Le regole stanno in InterpretePc.</summary>
+    public static bool ChiedeIlPc(string testo) => InterpretePc.Riguarda(testo);
 }

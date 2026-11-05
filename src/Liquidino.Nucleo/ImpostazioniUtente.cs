@@ -21,6 +21,8 @@ public sealed class ImpostazioniUtente
     public DateTimeOffset PrimoAvvio { get; set; } = DateTimeOffset.Now;
     public bool PermessoPc { get; set; }
     public bool CompagniaVocale { get; set; } = true;
+    /// <summary>Se Omni non c'è o non parla, leggo con le voci italiane di Windows.</summary>
+    public bool VoceWindows { get; set; } = true;
     public int CicliFatti { get; set; }
     public double? AvatarX { get; set; }
     public double? AvatarY { get; set; }
@@ -36,6 +38,10 @@ public sealed class ImpostazioniUtente
 
     [JsonIgnore]
     public string PercorsoFile { get; set; } = "";
+
+    /// <summary>Se il file era rovinato, qui c'è la copia messa da parte. Si riparte dalle scelte di serie.</summary>
+    [JsonIgnore]
+    public string? CopiaRovinata { get; private set; }
 
     public static readonly string[] Caratteri = ["allegro", "calmo", "ironico", "pazzerello", "saggio"];
 
@@ -71,20 +77,22 @@ public sealed class ImpostazioniUtente
     public static ImpostazioniUtente Carica(string? radice = null)
     {
         var percorso = Percorsi.FileImpostazioni(radice);
-        ImpostazioniUtente imp;
-        try
+        ImpostazioniUtente? imp = null;
+        string? rovinata = null;
+        if (File.Exists(percorso))
         {
-            if (File.Exists(percorso))
+            try
             {
-                var letto = JsonSerializer.Deserialize<ImpostazioniUtente>(File.ReadAllText(percorso), JsonIo.Opzioni);
-                imp = letto ?? new ImpostazioniUtente();
+                imp = JsonSerializer.Deserialize<ImpostazioniUtente>(File.ReadAllText(percorso), JsonIo.Opzioni);
             }
-            else imp = new ImpostazioniUtente();
+            catch
+            {
+                imp = null;
+            }
+            if (imp is null) rovinata = MettiDaParte(percorso);
         }
-        catch
-        {
-            imp = new ImpostazioniUtente();
-        }
+        imp ??= new ImpostazioniUtente();
+        imp.CopiaRovinata = rovinata;
         imp.PercorsoFile = percorso;
         if (!Caratteri.Contains(imp.Carattere)) imp.Carattere = "calmo";
         if (imp.Voce is not ("female" or "male")) imp.Voce = "female";
@@ -92,6 +100,23 @@ public sealed class ImpostazioniUtente
         if (imp.CicloMinuti < 5) imp.CicloMinuti = 5;
         if (string.IsNullOrWhiteSpace(imp.CartellaMotore)) imp.CartellaMotore = Percorsi.CartellaProvaCammo;
         return imp;
+    }
+
+    /// <summary>Rinomina il file che non si legge, così non si perde e non si riscrive sopra.</summary>
+    static string? MettiDaParte(string percorso)
+    {
+        try
+        {
+            var copia = percorso + ".rovinato-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var n = 1;
+            while (File.Exists(copia)) copia = percorso + ".rovinato-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + n++;
+            File.Move(percorso, copia);
+            return copia;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     readonly object _scrittura = new();
@@ -118,4 +143,7 @@ public static class JsonIo
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    /// <summary>Una riga sola, per il registro JSONL.</summary>
+    public static readonly JsonSerializerOptions Riga = new(Opzioni) { WriteIndented = false };
 }

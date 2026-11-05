@@ -22,7 +22,9 @@ public static class Aggiornamenti
     static int _staApplicando;
 
     public static string? Disponibile => _disponibile;
+    public static string Stato { get; private set; } = "Non ho ancora controllato";
     public static event Action<string>? Trovata;
+    public static event Action? StatoCambiato;
 
     static UpdateManager Gestore() => new(new SimpleWebSource(new Uri(Pagina)));
 
@@ -38,10 +40,16 @@ public static class Aggiornamenti
         {
             try { await Controlla(scarica: true, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { break; }
-            catch { /* senza rete si riprova fra quattro ore */ }
+            catch { ImpostaStato("Non riesco a controllare. Riprovo più tardi."); }
             try { await Task.Delay(OgniQuanto, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { break; }
         }
+    }
+
+    static void ImpostaStato(string testo)
+    {
+        Stato = testo;
+        try { StatoCambiato?.Invoke(); } catch { /* il menu può essere chiuso */ }
     }
 
     public static async Task<string?> Controlla(bool scarica, CancellationToken ct)
@@ -49,18 +57,29 @@ public static class Aggiornamenti
         await _turno.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ImpostaStato("Sto controllando…");
             var g = Gestore();
-            if (!g.IsInstalled) return null;
+            if (!g.IsInstalled)
+            {
+                ImpostaStato("Aggiornamenti dopo il Setup");
+                return null;
+            }
             var nuovo = await g.CheckForUpdatesAsync().ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
-            if (nuovo is null) return null;
+            if (nuovo is null)
+            {
+                ImpostaStato("Sei aggiornato");
+                return null;
+            }
             _trovato = nuovo;
             var versione = nuovo.TargetFullRelease.Version.ToString();
             Segnala(versione);
+            ImpostaStato("Aggiornamento " + versione + " disponibile");
             if (scarica && _scaricato?.Version != nuovo.TargetFullRelease.Version)
             {
-                await g.DownloadUpdatesAsync(nuovo, cancelToken: ct).ConfigureAwait(false);
+                await g.DownloadUpdatesAsync(nuovo, p => ImpostaStato("Scarico " + p + "%"), ct).ConfigureAwait(false);
                 _scaricato = nuovo.TargetFullRelease;
+                ImpostaStato("Pronto: riavvia per finire");
             }
             return versione;
         }
@@ -89,8 +108,9 @@ public static class Aggiornamenti
             Segnala(_trovato.TargetFullRelease.Version.ToString());
             if (_scaricato?.Version != _trovato.TargetFullRelease.Version)
             {
-                await g.DownloadUpdatesAsync(_trovato).ConfigureAwait(false);
+                await g.DownloadUpdatesAsync(_trovato, p => ImpostaStato("Scarico " + p + "%")).ConfigureAwait(false);
                 _scaricato = _trovato.TargetFullRelease;
+                ImpostaStato("Riavvia");
             }
             pacchetto = _scaricato;
             if (pacchetto is not null) Interlocked.Exchange(ref _staApplicando, 1);

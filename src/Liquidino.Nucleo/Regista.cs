@@ -8,6 +8,8 @@ public interface IRegista
     bool Presente(RuoloModello ruolo);
     IReadOnlyCollection<RuoloModello> Accesi { get; }
     string Descrizione();
+    string Riassunto();
+    string? UltimoErrore { get; }
     Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct);
     Task ScaricaTutto(CancellationToken ct);
     Task Ferma();
@@ -46,11 +48,25 @@ public sealed class Regista : IRegista
     public bool Presente(RuoloModello ruolo) => _rilevazione.Modelli.Any(m => m.Ruolo == ruolo);
     public IReadOnlyCollection<RuoloModello> Accesi => _accesi.ToList();
 
+    public string? UltimoErrore { get; private set; }
+
+    /// <summary>Il llama-server trovato nella cartella del motore, o null.</summary>
+    public string? Eseguibile => _rilevazione.Eseguibile;
+
     public string Descrizione()
     {
         if (!MotorePresente) return "motore non trovato";
         if (_accesi.Count == 0) return "motore fermo, modelli spenti";
         return "accesi: " + string.Join(", ", _accesi.Select(NomiModello.Etichetta));
+    }
+
+    public string Riassunto()
+    {
+        var nomi = _rilevazione.Modelli.Count == 0
+            ? "nessun GGUF"
+            : string.Join(", ", _rilevazione.Modelli.Select(m => m.Id));
+        var exe = _rilevazione.Eseguibile is null ? "llama-server non trovato" : Path.GetFileName(_rilevazione.Eseguibile);
+        return exe + " · cartella " + _imp.CartellaMotore + " · " + nomi;
     }
 
     public void Rileggi() => _rilevazione = RilevatoreModelli.Cerca(_imp.CartellaMotore);
@@ -65,16 +81,52 @@ public sealed class Regista : IRegista
     public void UccidiSubito()
     {
         AnnullaOperazioni();
-        try
-        {
-            if (_processo is { HasExited: false }) _processo.Kill(entireProcessTree: true);
-        }
-        catch { /* già chiuso */ }
+        UccidiProcesso(_processo);
+        UccidiLlamaSullaPorta(_imp.Porta);
         try { _cliente?.Dispose(); } catch { /* già chiuso */ }
         _cliente = null;
         _processo = null;
         _avviatoDaNoi = false;
         _accesi.Clear();
+    }
+
+    /// <summary>Chiude llama-server in ascolto sulla nostra porta, anche se non l'abbiamo avviato noi.</summary>
+    public static void UccidiLlamaSullaPorta(int porta)
+    {
+        try
+        {
+            var si = new ProcessStartInfo("netstat", "-ano")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(si);
+            if (p is null) return;
+            var letto = p.StandardOutput.ReadToEndAsync();
+            if (!p.WaitForExit(3000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
+                return;
+            }
+            var testo = letto.Wait(1000) ? letto.Result : "";
+            var ago = ":" + porta;
+            foreach (var riga in testo.Split('\n'))
+            {
+                if (!riga.Contains(ago, StringComparison.Ordinal) || !riga.Contains("LISTENING", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var pezzi = riga.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (pezzi.Length == 0 || !int.TryParse(pezzi[^1], out var pid) || pid <= 0) continue;
+                try
+                {
+                    var proc = Process.GetProcessById(pid);
+                    if (!proc.ProcessName.Contains("llama", StringComparison.OrdinalIgnoreCase)) continue;
+                    proc.Kill(entireProcessTree: true);
+                }
+                catch { /* il processo è già uscito */ }
+            }
+        }
+        catch { /* netstat può mancare: il processo nostro è già stato chiuso sopra */ }
     }
 
     public async Task<bool> Assicura(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)
@@ -93,10 +145,11 @@ public sealed class Regista : IRegista
         if (!await Garantito(ct)) return false;
         var piano = PoliticaCarico.Calcola(_accesi, ruoli);
         foreach (var spegni in piano.Spegni)
-            await ScaricaUno(spegni, ct);
-        foreach (var accendi in piano.Accendi)
+            await ScaricaUno(spegni, ct).ConfigureAwait(false);
+        // Con --no-models-autoload il router non carica da solo: lo chiediamo noi, ogni volta.
+        foreach (var ruolo in ruoli.Distinct())
         {
-            if (!await AccendiUno(accendi, ct)) return false;
+            if (!await AccendiUno(ruolo, ct).ConfigureAwait(false)) return false;
         }
         if (_accesi.Count > PoliticaCarico.MassimoInsieme)
             throw new InvalidOperationException("Mai più di due modelli insieme.");
@@ -158,6 +211,75 @@ public sealed class Regista : IRegista
         finally { _porta.Release(); }
     }
 
+    /// <summary>
+    /// La prova di carico: riempie il contesto delle mani fino a circa «voluti» token e guarda quanti ne ha letti il motore.
+    /// Prima misura quanti caratteri vale un token, con una frase corta e un campione. Poi prova a salvare lo slot su disco.
+    /// </summary>
+    public async Task<Riempimento> ProvaRiempimento(int voluti, CancellationToken ct)
+    {
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!Presente(RuoloModello.Mani)) return new Riempimento(null, null, "manca LFM3-1.7B (le mani)");
+        if (!await Assicura([RuoloModello.Mani], legati.Token).ConfigureAwait(false))
+            return new Riempimento(null, null, UltimoErrore ?? "le mani non si sono accese");
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false))
+            return new Riempimento(null, null, "il motore è occupato");
+        try
+        {
+            if (_cliente is null) return new Riempimento(null, null, "llama-server non risponde");
+            var id = NomiModello.IdDi(RuoloModello.Mani);
+            async Task<int?> Leggi(string testo, TimeSpan tempo)
+            {
+                var risp = await _cliente!.Chat(id, new RichiestaChat(
+                    RuoloModello.Mani, "Rispondi con una parola.", [], testo, null, null, null, null, 0, 1, true), legati.Token, tempo).ConfigureAwait(false);
+                return risp.TokenPrompt;
+            }
+            var base0 = await Leggi("ok", TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+            var campione = ProvaContesto.Riempitivo(ProvaContesto.CampionePer(voluti));
+            var base1 = await Leggi(campione, TimeSpan.FromSeconds(90)).ConfigureAwait(false);
+            if (base0 is not int b0 || base1 is not int b1 || b1 <= b0)
+                return new Riempimento(null, null, "il motore non dice quanti token ha letto");
+            var caratteri = ProvaContesto.CaratteriPer(voluti, b0, b1, campione.Length);
+            var letti = await Leggi(ProvaContesto.Riempitivo(caratteri), TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+            _registro.Scrivi("contesto", "prova di carico: voluti " + voluti + ", letti " + (letti?.ToString() ?? "?"), letti is null ? "errore" : "ok");
+            bool? slot = null;
+            string? notaSlot = null;
+            if (letti is not null) (slot, notaSlot) = await ProvaSlot(id, legati.Token).ConfigureAwait(false);
+            return new Riempimento(letti, slot, letti is null ? "il motore non ha detto quanti token ha letto" : null, notaSlot);
+        }
+        catch (OperationCanceledException) when (!legati.IsCancellationRequested)
+        {
+            return new Riempimento(null, null, "tempo scaduto");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e)
+        {
+            return new Riempimento(null, null, e.Message);
+        }
+        finally { _porta.Release(); }
+    }
+
+    async Task<(bool Salvato, string? Nota)> ProvaSlot(string id, CancellationToken ct)
+    {
+        const string nome = "prova-contesto.bin";
+        var file = Path.Combine(Percorsi.Slot(_radiceDati), nome);
+        try
+        {
+            if (File.Exists(file)) File.Delete(file);
+            var risposta = await _cliente!.SalvaSlot(id, nome, ct, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            var salvato = File.Exists(file) && new FileInfo(file).Length > 0;
+            var nota = salvato ? null : risposta ?? "il motore ha detto ok, ma il file non c'è";
+            _registro.Scrivi("contesto", salvato ? "lo slot si salva su disco" : "lo slot non si è salvato su disco: " + nota, salvato ? "ok" : "vuoto");
+            return (salvato, nota);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (false, "tempo scaduto"); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e) { return (false, e.Message); }
+        finally
+        {
+            try { if (File.Exists(file)) File.Delete(file); } catch { /* si cancella la prossima volta */ }
+        }
+    }
+
     public async Task<string?> Trascrivi(byte[] wav, CancellationToken ct)
     {
         using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
@@ -207,7 +329,11 @@ public sealed class Regista : IRegista
         _cliente?.Dispose();
         _cliente = null;
         _accesi.Clear();
-        if (_rilevazione.Eseguibile is null) return false;
+        if (_rilevazione.Eseguibile is null)
+        {
+            UltimoErrore = "non trovo llama-server in " + _imp.CartellaMotore;
+            return false;
+        }
         var preset = Percorsi.Preset(_radiceDati);
         await Task.Run(() => PresetMotore.Scrivi(preset, Percorsi.Slot(_radiceDati), _rilevazione.Modelli, _imp), ct).ConfigureAwait(false);
         var exe = _rilevazione.Eseguibile;
@@ -265,11 +391,9 @@ public sealed class Regista : IRegista
             }
             await Task.Delay(300, ct).ConfigureAwait(false);
         }
-        _registro.SegnaErrore("llama-server non si è acceso. Guarda motore/server.log.");
-        if (_avviatoDaNoi && _processo is { HasExited: false })
-        {
-            try { _processo.Kill(entireProcessTree: true); } catch { /* già chiuso */ }
-        }
+        UltimoErrore = "llama-server non si è acceso. Guarda motore/server.log.";
+        _registro.SegnaErrore(UltimoErrore);
+        if (_avviatoDaNoi) UccidiProcesso(_processo);
         _cliente?.Dispose();
         _cliente = null;
         _processo = null;
@@ -279,15 +403,23 @@ public sealed class Regista : IRegista
 
     async Task<bool> AccendiUno(RuoloModello ruolo, CancellationToken ct)
     {
-        if (_cliente is null) return false;
+        if (_cliente is null)
+        {
+            UltimoErrore = "llama-server non è in ascolto.";
+            return false;
+        }
+        if (_accesi.Contains(ruolo)) return true;
         var id = NomiModello.IdDi(ruolo);
         var slot = id + ".bin";
+        _registro.Scrivi("modello", "chiedo il caricamento di " + id, "ok", ruolo.ToString());
         var ok = await _cliente.Carica(id, ct).ConfigureAwait(false);
         if (!ok)
         {
-            _registro.SegnaErrore("non sono riuscito a caricare " + id);
+            UltimoErrore = _cliente.UltimoErrore ?? ("non sono riuscito a caricare " + id);
+            _registro.SegnaErrore(UltimoErrore);
             return false;
         }
+        UltimoErrore = null;
         _accesi.Add(ruolo);
         var fileSlot = Path.Combine(Percorsi.Slot(_radiceDati), slot);
         if (File.Exists(fileSlot))
@@ -311,15 +443,38 @@ public sealed class Regista : IRegista
         _registro.Scrivi("modello", "scaricato " + NomiModello.Etichetta(ruolo), "ok", ruolo.ToString());
     }
 
+    /// <summary>Chiude il processo. Il kill dell'albero, se resta fermo, non blocca chi ha chiesto di uscire.</summary>
+    static void UccidiProcesso(Process? processo)
+    {
+        if (processo is null) return;
+        try
+        {
+            if (processo.HasExited) return;
+            var fatto = Task.Run(() =>
+            {
+                try { processo.Kill(entireProcessTree: true); }
+                catch
+                {
+                    try { processo.Kill(); } catch { /* già chiuso */ }
+                }
+            });
+            if (!fatto.Wait(4000))
+            {
+                try { processo.Kill(); } catch { /* già chiuso */ }
+            }
+        }
+        catch { /* già chiuso */ }
+    }
+
     static readonly object LucchettoLog = new();
 
     static async Task Pompa(StreamReader letto, string log)
     {
         try
         {
-            while (!letto.EndOfStream)
+            while (true)
             {
-                var riga = await letto.ReadLineAsync();
+                var riga = await letto.ReadLineAsync().ConfigureAwait(false);
                 if (riga is null) break;
                 lock (LucchettoLog) File.AppendAllText(log, riga + Environment.NewLine);
             }

@@ -1,20 +1,33 @@
 namespace Liquidino.Nucleo;
 
 /// <summary>
-/// Cartelle di Liquidino. Il suo mondo sta in %LOCALAPPDATA%\Liquidino\mondo
-/// e da lì non esce, se non glielo chiedi tu a mano.
+/// I dati stanno fuori dalla cartella del programma: Velopack la svuota a ogni aggiornamento.
+/// Il mondo è in %LOCALAPPDATA%\Liquidino-dati\mondo. I file di serie (prompt, catalogo) restano nell'app;
+/// le copie che puoi modificare stanno nella cartella dati.
 /// </summary>
 public static class Percorsi
 {
     public const string CartellaProvaCammo = @"C:\Users\cammo\LiquidinoProva";
+    public const string NomeDati = "Liquidino-dati";
+    public const string NomeInstallazioneVecchia = "Liquidino";
 
-    public static string RadiceDati()
+    public static string CartellaLocale()
     {
         var locale = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(locale))
             locale = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
-        return Path.Combine(locale, "Liquidino");
+        return locale;
     }
+
+    static string? _radiceForzata;
+
+    /// <summary>Solo per la prova di avvio: tutti i dati in una cartella a parte, lontano da quelli veri.</summary>
+    public static void UsaRadice(string? radice) => _radiceForzata = string.IsNullOrWhiteSpace(radice) ? null : Path.GetFullPath(radice);
+
+    public static string RadiceDati() => _radiceForzata ?? Path.Combine(CartellaLocale(), NomeDati);
+
+    /// <summary>Dove la 0.2.0 teneva i dati, cioè dentro la cartella che Velopack cancella.</summary>
+    public static string RadiceVecchia() => Path.Combine(CartellaLocale(), NomeInstallazioneVecchia);
 
     public static string Mondo(string? radice = null) => Path.Combine(radice ?? RadiceDati(), "mondo");
     public static string FileImpostazioni(string? radice = null) => Path.Combine(radice ?? RadiceDati(), "impostazioni.json");

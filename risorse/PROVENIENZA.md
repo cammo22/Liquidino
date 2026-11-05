@@ -26,4 +26,4 @@ llama.cpp (MIT) non è incluso. Si indica la cartella dove è già stato scarica
 
 ## Orecchio
 
-Non è incluso nessun modello di wake word. Quando ci saranno, andranno in `%LOCALAPPDATA%\Liquidino\orecchio\`: `silero_vad.onnx` (MIT) e `ehi-liquidino.onnx` addestrato da noi. Il codice di openWakeWord è Apache-2.0; i suoi modelli preaddestrati non si usano.
+Non è incluso nessun modello di wake word. Quando ci saranno, andranno in `%LOCALAPPDATA%\Liquidino-dati\orecchio\`: `silero_vad.onnx` (MIT) e `ehi-liquidino.onnx` addestrato da noi. Il codice di openWakeWord è Apache-2.0; i suoi modelli preaddestrati non si usano.

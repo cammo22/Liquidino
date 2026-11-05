@@ -18,7 +18,8 @@ public sealed record RichiestaChat(
     bool SpegniRagionamento,
     string? TipoImmagine = null);
 
-public sealed record RispostaChat(string Testo, string? ArgomentiStrumento);
+/// <summary>TokenPrompt è usage.prompt_tokens del motore: quanti token ha letto davvero.</summary>
+public sealed record RispostaChat(string Testo, string? ArgomentiStrumento, int? TokenPrompt = null);
 
 /// <summary>Parla solo con llama-server su 127.0.0.1. Niente altre reti.</summary>
 public sealed class ClienteLlama : IDisposable
@@ -27,7 +28,13 @@ public sealed class ClienteLlama : IDisposable
 
     public ClienteLlama(int porta)
     {
-        _http = new HttpClient
+        // Solo questo PC: niente proxy di sistema, altrimenti 127.0.0.1 resta in attesa del proxy.
+        var prese = new SocketsHttpHandler
+        {
+            UseProxy = false,
+            ConnectTimeout = TimeSpan.FromSeconds(2)
+        };
+        _http = new HttpClient(prese)
         {
             BaseAddress = new Uri($"http://127.0.0.1:{porta}/"),
             Timeout = Timeout.InfiniteTimeSpan
@@ -51,21 +58,37 @@ public sealed class ClienteLlama : IDisposable
         catch { return false; }
     }
 
+    public string? UltimoErrore { get; private set; }
+
+    /// <summary>Chiede al router di caricare il modello e aspetta che lo stato sia «loaded».</summary>
     public async Task<bool> Carica(string id, CancellationToken ct)
     {
+        UltimoErrore = null;
         using var limite = Limite(ct, TempoCarico);
         var risp = await Posta("models/load", new { model = id }, limite.Token).ConfigureAwait(false);
-        if (!risp.ok && risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!risp.ok)
+        {
+            if (risp.corpo.Contains("already", StringComparison.OrdinalIgnoreCase)) return true;
+            UltimoErrore = "il router ha rifiutato il caricamento di " + id + ": " + Taglia(risp.corpo);
+            return false;
+        }
         var fine = DateTime.UtcNow + TempoCarico;
         while (DateTime.UtcNow < fine)
         {
             limite.Token.ThrowIfCancellationRequested();
             var stato = await StatoModello(id, limite.Token).ConfigureAwait(false);
             if (stato is "loaded") return true;
-            if (stato is "failed" or "error") return false;
+            if (stato is "failed" or "error")
+            {
+                UltimoErrore = "il modello " + id + " è andato in errore durante il caricamento.";
+                return false;
+            }
             await Task.Delay(400, limite.Token).ConfigureAwait(false);
         }
-        return await StatoModello(id, limite.Token).ConfigureAwait(false) is "loaded";
+        var finale = await StatoModello(id, ct).ConfigureAwait(false);
+        if (finale is "loaded") return true;
+        UltimoErrore = "tempo scaduto: " + id + " non è pronto (stato: " + (finale ?? "sconosciuto") + ").";
+        return false;
     }
 
     public async Task Scarica(string id, CancellationToken ct)
@@ -74,16 +97,22 @@ public sealed class ClienteLlama : IDisposable
         await Posta("models/unload", new { model = id }, limite.Token).ConfigureAwait(false);
     }
 
-    public async Task SalvaSlot(string id, string file, CancellationToken ct)
+    /// <summary>
+    /// Salva lo slot 0 del modello su disco. Il router sceglie il modello dal campo «model» del corpo,
+    /// quindi il nome va lì oltre che nell'indirizzo. Ritorna null se il motore dice ok, se no la sua risposta.
+    /// </summary>
+    public async Task<string?> SalvaSlot(string id, string file, CancellationToken ct, TimeSpan? tempo = null)
     {
-        using var limite = Limite(ct, TempoScarico);
-        await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
+        using var limite = Limite(ct, tempo ?? TempoScarico);
+        var risp = await Posta($"slots/0?action=save&model={Uri.EscapeDataString(id)}", new { model = id, filename = file }, limite.Token).ConfigureAwait(false);
+        return risp.ok ? null : Taglia(risp.corpo);
     }
 
-    public async Task RipristinaSlot(string id, string file, CancellationToken ct)
+    public async Task<string?> RipristinaSlot(string id, string file, CancellationToken ct)
     {
         using var limite = Limite(ct, TempoScarico);
-        await Posta($"slots/0?action=restore&model={Uri.EscapeDataString(id)}", new { filename = file }, limite.Token).ConfigureAwait(false);
+        var risp = await Posta($"slots/0?action=restore&model={Uri.EscapeDataString(id)}", new { model = id, filename = file }, limite.Token).ConfigureAwait(false);
+        return risp.ok ? null : Taglia(risp.corpo);
     }
 
     public async Task<string?> StatoModello(string id, CancellationToken ct)
@@ -101,7 +130,13 @@ public sealed class ClienteLlama : IDisposable
                 if (!string.Equals(mid, id, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!m.TryGetProperty("status", out var st)) return "unloaded";
                 if (st.ValueKind == JsonValueKind.String) return st.GetString();
-                if (st.ValueKind == JsonValueKind.Object && st.TryGetProperty("value", out var v)) return v.GetString();
+                if (st.ValueKind == JsonValueKind.Object)
+                {
+                    // Il router, se il processo figlio muore, lascia value=unloaded e failed=true.
+                    if (st.TryGetProperty("failed", out var fallito) && fallito.ValueKind == JsonValueKind.True)
+                        return "failed";
+                    if (st.TryGetProperty("value", out var v)) return v.GetString();
+                }
             }
             return "unloaded";
         }
@@ -110,8 +145,10 @@ public sealed class ClienteLlama : IDisposable
 
     public async Task<string> Decidi(string idModello, string stato, CatalogoAzioni catalogo, CancellationToken ct)
     {
+        var freschi = CatalogoAzioni.Predefinito();
         var criteria = new Dictionary<string, string>();
-        foreach (var a in catalogo.Azioni) criteria[a.Nome] = a.Descrizione;
+        foreach (var a in catalogo.Azioni)
+            criteria[a.Nome] = CatalogoAzioni.Criterio(freschi.Trova(a.Nome) ?? a);
         var corpo = new
         {
             model = idModello,
@@ -121,7 +158,7 @@ public sealed class ClienteLlama : IDisposable
                 azione = new
                 {
                     type = "choice",
-                    instructions = "Quale azione deve fare Liquidino? Scegline una sola fra queste.",
+                    instructions = CatalogoAzioni.IstruzioniD1,
                     criteria
                 }
             }
@@ -132,7 +169,7 @@ public sealed class ClienteLlama : IDisposable
         return risp.corpo;
     }
 
-    public async Task<RispostaChat> Chat(string idModello, RichiestaChat richiesta, CancellationToken ct)
+    public async Task<RispostaChat> Chat(string idModello, RichiestaChat richiesta, CancellationToken ct, TimeSpan? tempo = null)
     {
         var messaggi = new List<object>
         {
@@ -200,7 +237,7 @@ public sealed class ClienteLlama : IDisposable
                 payload["tool_choice"] = new { type = "function", function = new { name = richiesta.StrumentoNome } };
             }
 
-            using var limite = Limite(ct, TempoChat);
+            using var limite = Limite(ct, tempo ?? TempoChat);
             var risp = await Posta("v1/chat/completions", payload, limite.Token).ConfigureAwait(false);
             if (!risp.ok) throw new InvalidOperationException("La chat non ha risposto: " + Taglia(risp.corpo));
             return LeggiChat(risp.corpo);
@@ -231,7 +268,11 @@ public sealed class ClienteLlama : IDisposable
                 break;
             }
         }
-        return new RispostaChat(Testo.PulisciRisposta(testo), argomenti);
+        int? letti = null;
+        if (doc.RootElement.TryGetProperty("usage", out var uso) && uso.ValueKind == JsonValueKind.Object
+            && uso.TryGetProperty("prompt_tokens", out var pt) && pt.TryGetInt32(out var n))
+            letti = n;
+        return new RispostaChat(Testo.PulisciRisposta(testo), argomenti, letti);
     }
 
     public async Task<byte[]> Sintetizza(string idModello, string testo, string voce, CancellationToken ct)
