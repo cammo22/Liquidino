@@ -35,6 +35,18 @@ public sealed class ImpostazioniUtente
     public bool ContestoMisurato { get; set; }
     public string FraseContesto { get; set; } = "";
     public string VersioneNovitaViste { get; set; } = "";
+    /// <summary>Ogni quanti secondi un pensiero, da sveglio (da 10 secondi a 2 ore). 0 = prendi i vecchi minuti.</summary>
+    public int CicloSecondi { get; set; }
+    /// <summary>Ogni quanti secondi sogna mentre dorme.</summary>
+    public int SogniSecondi { get; set; } = 30;
+    /// <summary>Il massimo che può dormire, in minuti (10-120). La durata la sceglie lui.</summary>
+    public int SonnoMassimoMinuti { get; set; } = 120;
+    /// <summary>Quante dormite sono arrivate fino alla sveglia.</summary>
+    public int DormiteComplete { get; set; }
+    /// <summary>In pausa niente si carica da solo e l'avatar diventa in bianco e nero.</summary>
+    public bool Pausa { get; set; }
+    /// <summary>👍/👎 sotto le risposte in chat e sui sogni.</summary>
+    public bool MostraVoti { get; set; } = true;
     /// <summary>La parola per svegliarlo con le Orecchie accese.</summary>
     public string ParolaSveglia { get; set; } = Nucleo.ParolaSveglia.DiSerie;
     /// <summary>Le Orecchie si riaccendono all'avvio se erano accese.</summary>
@@ -111,6 +123,11 @@ public sealed class ImpostazioniUtente
         if (imp.Porta is < 1 or > 65535) imp.Porta = 8094;
         if (imp.CicloMinuti < 5) imp.CicloMinuti = 5;
         if (string.IsNullOrWhiteSpace(imp.CartellaMotore)) imp.CartellaMotore = Percorsi.CartellaProvaCammo;
+        if (imp.CicloSecondi <= 0) imp.CicloSecondi = Math.Clamp(imp.CicloMinuti, 1, 120) * 60;
+        imp.CicloSecondi = Math.Clamp(imp.CicloSecondi, 10, 7200);
+        imp.SogniSecondi = Math.Clamp(imp.SogniSecondi, 10, 600);
+        imp.SonnoMassimoMinuti = Math.Clamp(imp.SonnoMassimoMinuti, 10, 120);
+        if (imp.DormiteComplete < 0) imp.DormiteComplete = 0;
         imp.ParolaSveglia = string.IsNullOrWhiteSpace(imp.ParolaSveglia) ? Nucleo.ParolaSveglia.DiSerie : imp.ParolaSveglia.Trim();
         if (imp.ParolaSveglia.Length > 40) imp.ParolaSveglia = imp.ParolaSveglia[..40];
         imp.Microfono ??= "";

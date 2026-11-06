@@ -19,7 +19,7 @@ public sealed class Ponte
     public ManiWindows Mani { get; } = new();
     public LettoreVoce Lettore { get; } = new();
     public OrecchieWindows Udito { get; }
-    public StatoCompagno Stato { get; private set; } = StatoCompagno.Dorme;
+    public StatoCompagno Stato { get; private set; } = StatoCompagno.Sveglio;
     public string? EtichettaAggiornamento { get; private set; }
 
     public event Action<StatoCompagno>? StatoCambiato;
@@ -31,6 +31,12 @@ public sealed class Ponte
     public event Action<string>? Annuncio;
     public event Action<EsitoDialogo>? Risposto;
     public event Action? OrecchieCambiate;
+    /// <summary>Un modello si è acceso o spento, o la pausa è cambiata: le luci dell'avatar si aggiornano.</summary>
+    public event Action? ModelliCambiati;
+    /// <summary>Un sogno appena fatto, mentre dorme.</summary>
+    public event Action<string>? Sognato;
+    /// <summary>Si è addormentato o svegliato.</summary>
+    public event Action? SonnoCambiato;
     public bool StaAscoltando { get; private set; }
     public FinestraCasa? Casa { get; set; }
     public ComandiLocali Comandi { get; } = new();
@@ -50,6 +56,7 @@ public sealed class Ponte
         Dialogo = new Dialogo(impostazioni, Mondo, Registro, Regista, CatalogoAzioni.Carica(Percorsi.Catalogo()), Mani);
         Ciclo = new CicloAutonomo(impostazioni, Mondo, Registro, Regista);
         Udito = new OrecchieWindows(impostazioni, () => Regista.Rilevazione.CartellaModelli, Registro);
+        Regista.AccesiCambiati += () => SulFiloUi(() => ModelliCambiati?.Invoke());
         Udito.Cambiate += () => SulFiloUi(() => OrecchieCambiate?.Invoke());
         Udito.Decisione += (d, fonte, chi) => SulFiloUi(() => _ = DaOrecchie(d, chi));
         Dialogo.Udito = () => Udito.Accese ? Udito.Logica.Registro.Testo(DateTimeOffset.Now) : null;
@@ -71,7 +78,8 @@ public sealed class Ponte
     public void AvviaOrologi()
     {
         _ = Task.Run(Mani.Prepara);
-        _ciclo = new DispatcherTimer { Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti) };
+        if (Impostazioni.Pausa) _ = Regista.ImpostaPausa(true);
+        _ciclo = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Impostazioni.CicloSecondi) };
         _ciclo.Tick += async (_, _) =>
         {
             try { await CicloOrario(); }
@@ -84,7 +92,7 @@ public sealed class Ponte
         _notte.Tick += async (_, _) =>
         {
             try { await ControllaQuiete(); }
-            catch { /* la notte si ricontrolla fra un minuto */ }
+            catch { /* si ricontrolla fra un minuto */ }
         };
         _notte.Start();
     }
@@ -138,7 +146,8 @@ public sealed class Ponte
             _ = Task.Run(() => Impostazioni.Salva());
         }
         Dialogo.DimenticaSessione();
-        ImpostaStato(StatoCompagno.Dorme);
+        if (Dormita is not null) FinisciSonno(completa: false);
+        ImpostaStato(StatoCompagno.Sveglio);
         _ = Task.Run(() => Registro.Scrivi("stop", "STOP premuto: modelli scaricati", "ok"));
         _ = Comandi.StopAsync(ct => Regista.ScaricaTutto(ct), TimeSpan.FromSeconds(4));
     }
@@ -186,22 +195,6 @@ public sealed class Ponte
         SulFiloUi(() => OrecchieCambiate?.Invoke());
     }
 
-    /// <summary>Il tasto 📞: entra o esce dalla modalità chiamata.</summary>
-    public async Task AlternaChiamata()
-    {
-        SegnaGesto();
-        string frase;
-        try { frase = Udito.InChiamata ? await Udito.ChiudiChiamata() : await Udito.ApriChiamata(); }
-        catch (Exception e)
-        {
-            Registro.SegnaErrore("chiamata: " + e.Message);
-            frase = Testo.FalloTu("la modalità chiamata non parte: " + e.Message);
-        }
-        Impostazioni.OrecchieAccese = Udito.Accese;
-        Annuncia(frase);
-        SulFiloUi(() => OrecchieCambiate?.Invoke());
-    }
-
     DispatcherTimer? _dimmi;
 
     /// <summary>Quello che le orecchie hanno deciso: un comando tuo, il nome da solo, o qualcuno in chiamata.</summary>
@@ -212,6 +205,7 @@ public sealed class Ponte
             switch (d.Cosa)
             {
                 case CosaFare.Svegliato:
+                    if (Dormita is not null) FinisciSonno(completa: false);
                     if (Stato is StatoCompagno.Pensa or StatoCompagno.Parla || StaAscoltando) return;
                     SegnaGesto();
                     ImpostaStato(StatoCompagno.Ascolta);
@@ -296,6 +290,8 @@ public sealed class Ponte
 
     public async Task<EsitoDialogo> Messaggio(string testo, string? sentito = null)
     {
+        // Se gli scrivi o lo chiami mentre dorme, si sveglia (la dormita non conta come completa).
+        if (Dormita is not null) FinisciSonno(completa: false);
         var ct = Token();
         SegnaGesto();
         ImpostaStato(StatoCompagno.Pensa);
@@ -316,9 +312,9 @@ public sealed class Ponte
     EsitoDialogo TurnoAnnullato()
     {
         var testo = "Turno annullato: è stato premuto STOP o Esc. Se il modello non era già pronto, non l'ho caricato.";
-        ImpostaStato(StatoCompagno.Dorme);
+        ImpostaStato(StatoCompagno.Sveglio);
         SulFiloUi(() => Annuncio?.Invoke(testo));
-        return new EsitoDialogo(testo, StatoCompagno.Dorme, false, false, true, false, false, null, null);
+        return new EsitoDialogo(testo, StatoCompagno.Sveglio, false, false, true, false, false, null, null);
     }
 
     public async Task<EsitoDialogo> DaAudio(byte[] wav)
@@ -375,13 +371,7 @@ public sealed class Ponte
         SulFiloUi(() => Risposto?.Invoke(esito));
         if (esito.VuoiVoce && esito.Testo.Length > 0 && !ct.IsCancellationRequested)
             await Parla(esito.Testo, ct);
-        if (esito.ScaricaDopo)
-        {
-            Dialogo.DimenticaSessione();
-            await Regista.ScaricaTutto(CancellationToken.None);
-            ImpostaStato(StatoCompagno.Dorme);
-            Registro.Scrivi("sonno", "è andato a dormire", "ok");
-        }
+        if (esito.ScaricaDopo) Dormi();
         else if (Stato == StatoCompagno.Pensa)
             ImpostaStato(esito.Stato);
         _turni++;
@@ -435,7 +425,7 @@ public sealed class Ponte
 
     public async Task CicloOrario()
     {
-        if (_cicloInCorso || !Impostazioni.CicloAutonomo) return;
+        if (_cicloInCorso || !Impostazioni.CicloAutonomo || Dormita is not null) return;
         if (Stato is StatoCompagno.Ascolta or StatoCompagno.Pensa or StatoCompagno.Parla) return;
         _cicloInCorso = true;
         try
@@ -453,23 +443,172 @@ public sealed class Ponte
     async Task ControllaQuiete()
     {
         var ora = DateTimeOffset.Now;
-        var lavora = StaLavorando;
-        if (Quiete.PuoAddormentarsi(Impostazioni.ENotte(ora), lavora, _ultimoGesto, ora))
-        {
-            if (Regista.Accesi.Count == 0 && Stato == StatoCompagno.Dorme) return;
-            Lettore.Ferma();
-            Dialogo.DimenticaSessione();
-            await Regista.ScaricaTutto(CancellationToken.None);
-            ImpostaStato(StatoCompagno.Dorme);
-            Registro.Scrivi("notte", "di notte dorme, modelli scaricati", "ok");
-            ScriviDiario(ora);
-            return;
-        }
-        if (Quiete.PuoScaricare(lavora, Regista.Accesi.Count, _ultimoGesto, ora))
+        // Mentre dorme sogna col modello acceso: non si scarica per inattività.
+        if (Dormita is not null) return;
+        if (Quiete.PuoScaricare(StaLavorando, Regista.Accesi.Count, _ultimoGesto, ora))
         {
             await Regista.ScaricaTutto(CancellationToken.None);
             Registro.Scrivi("motore", "inattività: modelli scaricati", "ok");
         }
+    }
+
+    // ---------- sonno ----------
+
+    public Dormita? Dormita { get; private set; }
+    DispatcherTimer? _sogni;
+    bool _sognaInCorso;
+
+    /// <summary>
+    /// Lo metti a dormire tu. Sceglie lui quanto (al massimo due ore, o il massimo del Mainframe), lo dice,
+    /// e sogna spesso finché non suona la sveglia. Se lo svegli prima non conta come dormita completa.
+    /// </summary>
+    public void Dormi()
+    {
+        if (Dormita is not null) return;
+        Annulla();
+        Dialogo.DimenticaSessione();
+        var ora = DateTimeOffset.Now;
+        Diario.Conti oggi;
+        try { oggi = Diario.Conta(Mondo.RadiceDati, DateOnly.FromDateTime(ora.Date)); }
+        catch { oggi = new Diario.Conti(0, 0, 0, 0, 0, 0, 0, 0); }
+        var durata = Sonno.Durata(oggi, Impostazioni.SonnoMassimoMinuti, Environment.TickCount);
+        Dormita = new Dormita { Inizio = ora, Durata = durata };
+        ImpostaStato(StatoCompagno.Dorme);
+        Registro.Scrivi("sonno", "si addormenta per " + Sonno.Leggibile(durata), "ok");
+        Annuncia(Sonno.FraseInizio(Dormita));
+        _sogni?.Stop();
+        _sogni = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Impostazioni.SogniSecondi) };
+        _sogni.Tick += async (_, _) =>
+        {
+            try { await Sogna(); }
+            catch (Exception e) { Registro.SegnaErrore("sogno: " + e.Message); }
+        };
+        _sogni.Start();
+        SulFiloUi(() => SonnoCambiato?.Invoke());
+    }
+
+    async Task Sogna()
+    {
+        var d = Dormita;
+        if (d is null || _sognaInCorso) return;
+        var ora = DateTimeOffset.Now;
+        if (d.Finita(ora))
+        {
+            FinisciSonno(completa: true);
+            return;
+        }
+        _sognaInCorso = true;
+        try
+        {
+            Diario.Conti oggi;
+            try { oggi = Diario.Conta(Mondo.RadiceDati, DateOnly.FromDateTime(ora.Date)); }
+            catch { oggi = new Diario.Conti(0, 0, 0, 0, 0, 0, 0, 0); }
+            var sogno = await Ciclo.Sogna(d, oggi, Token());
+            if (Dormita != d) return;
+            if (sogno is null)
+            {
+                // Senza modello (o in pausa) dorme lo stesso, ma lo dice una volta sola.
+                if (d.Sogni.Count == 0 && !_senzaSogniDetto)
+                {
+                    _senzaSogniDetto = true;
+                    Annuncia(Regista.InPausa
+                        ? "Sono in pausa: dormo senza sognare. Se vuoi che sogni, accendi la luce di LFM3-1.7B."
+                        : "Dormo senza sognare: per sognare mi serve LFM3-1.7B (o Omni).");
+                }
+                return;
+            }
+            Sonno.ScriviSogno(Mondo, d, sogno, ora);
+            SulFiloUi(() => { Sognato?.Invoke(sogno); MondoCambiato?.Invoke(); });
+        }
+        catch (OperationCanceledException) { /* STOP */ }
+        finally { _sognaInCorso = false; }
+    }
+
+    bool _senzaSogniDetto;
+
+    /// <summary>Il tasto 🌙/☀: se dorme lo sveglia (non conta come completa), se no lo mette a dormire.</summary>
+    public void AlternaSonno()
+    {
+        SegnaGesto();
+        if (Dormita is not null) FinisciSonno(completa: false);
+        else Dormi();
+    }
+
+    void FinisciSonno(bool completa)
+    {
+        var d = Dormita;
+        if (d is null) return;
+        _sogni?.Stop();
+        _sogni = null;
+        Dormita = null;
+        _senzaSogniDetto = false;
+        var ora = DateTimeOffset.Now;
+        if (completa)
+        {
+            Impostazioni.DormiteComplete++;
+            ScriviDiario(ora);
+        }
+        _ = Task.Run(() => Impostazioni.Salva());
+        Registro.Scrivi("sonno", (completa ? "sveglia da solo dopo " : "svegliato dopo ") + Sonno.Leggibile(ora - d.Inizio) + ", " + d.Sogni.Count + " sogni", "ok");
+        ImpostaStato(StatoCompagno.Sveglio);
+        Annuncia(Sonno.FraseFine(d, ora, completa, Impostazioni.DormiteComplete));
+        _ = Regista.ScaricaTutto(CancellationToken.None);
+        SulFiloUi(() => SonnoCambiato?.Invoke());
+    }
+
+    // ---------- pausa e voti ----------
+
+    /// <summary>Il tasto ⏸: in pausa niente si carica da solo. I modelli si accendono solo dalle luci.</summary>
+    public async Task AlternaPausa()
+    {
+        SegnaGesto();
+        var pausa = !Regista.InPausa;
+        Impostazioni.Pausa = pausa;
+        _ = Task.Run(() => Impostazioni.Salva());
+        if (pausa) Annulla();
+        await Regista.ImpostaPausa(pausa);
+        Annuncia(pausa
+            ? "In pausa: non carico niente da solo. Accendi tu un modello dalla sua luce, o togli la pausa."
+            : "Pausa tolta: carico i modelli quando servono.");
+        SulFiloUi(() => ModelliCambiati?.Invoke());
+    }
+
+    /// <summary>Una luce cliccata: accende o spegne quel modello.</summary>
+    public async Task<string> AlternaModello(RuoloModello ruolo)
+    {
+        SegnaGesto();
+        if (!Regista.Presente(ruolo)) return NomiModello.Etichetta(ruolo) + " non è installato.";
+        try
+        {
+            if (Regista.Accesi.Contains(ruolo))
+            {
+                await Regista.SpegniManuale(ruolo, Token());
+                return NomiModello.Etichetta(ruolo) + " spento: memoria libera.";
+            }
+            var ok = await Regista.AccendiManuale(ruolo, Token());
+            return ok ? NomiModello.Etichetta(ruolo) + " acceso." : Testo.FalloTu("non riesco ad accendere " + NomiModello.Etichetta(ruolo) + ". " + (Regista.UltimoErrore ?? ""));
+        }
+        catch (OperationCanceledException) { return "Fermato."; }
+        catch (Exception e)
+        {
+            Registro.SegnaErrore("luce del modello: " + e.Message);
+            return Testo.FalloTu("non riesco ad accendere " + NomiModello.Etichetta(ruolo) + ". " + e.Message);
+        }
+    }
+
+    /// <summary>👍 o 👎: lui non risponde, lo segna per allenarsi.</summary>
+    public void Vota(string fonte, string testo, bool piace)
+    {
+        if (string.IsNullOrWhiteSpace(testo)) return;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                Palestra.Segna(new Voto(DateTimeOffset.Now, fonte, testo, piace), Mondo.RadiceDati);
+                Registro.Scrivi("voto", fonte + ": " + (piace ? "👍" : "👎"), "ok");
+            }
+            catch (Exception e) { Registro.SegnaErrore("voto: " + e.Message); }
+        });
     }
 
     /// <summary>Il diario della giornata appena finita, quando va a dormire. Un errore qui non sveglia nessuno.</summary>
@@ -477,7 +616,7 @@ public sealed class Ponte
     {
         try
         {
-            var giorno = Diario.GiornoDaRaccontare(ora, Impostazioni.OraNotteFine);
+            var giorno = DateOnly.FromDateTime(ora.Date);
             var percorso = Diario.Scrivi(Mondo, giorno, ora);
             Registro.Scrivi("diario", Path.GetFileName(percorso), "ok");
             SulFiloUi(() => MondoCambiato?.Invoke());
@@ -601,16 +740,31 @@ public sealed class Ponte
         }
     }
 
+    /// <summary>Le impostazioni sono state salvate: l'avatar rilegge oggetto e grandezza.</summary>
+    public event Action? ImpostazioniSalvate;
+
+    public void AvvisaImpostazioni() => SulFiloUi(() => ImpostazioniSalvate?.Invoke());
+
+    /// <summary>Rimette l'orologio dei pensieri all'intervallo scelto.</summary>
+    public void AggiornaOrologi() => SulFiloUi(() =>
+    {
+        if (_ciclo is null) return;
+        _ciclo.Stop();
+        _ciclo.Interval = TimeSpan.FromSeconds(Impostazioni.CicloSecondi);
+        if (Impostazioni.CicloAutonomo) _ciclo.Start();
+    });
+
     public async Task RicaricaMotore()
     {
         await Task.Run(() => Impostazioni.Salva()).ConfigureAwait(false);
         await Regista.Ferma().ConfigureAwait(false);
         Regista.Rileggi();
+        SulFiloUi(() => ModelliCambiati?.Invoke());
         SulFiloUi(() =>
         {
             _ciclo?.Stop();
             if (_ciclo is null) return;
-            _ciclo.Interval = TimeSpan.FromMinutes(Impostazioni.CicloMinuti);
+            _ciclo.Interval = TimeSpan.FromSeconds(Impostazioni.CicloSecondi);
             if (Impostazioni.CicloAutonomo) _ciclo.Start();
         });
     }

@@ -92,7 +92,7 @@ public sealed class FinestraParola : Window
         if (!_ponte.Udito.ParakeetPresente)
         {
             _registra.IsEnabled = false;
-            _esito.Text = Testo.FalloTu("per registrare la parola mi serve Parakeet. Scaricalo da Mainframe → Modelli, poi riapri questa finestra");
+            _esito.Text = Testo.FalloTu("per registrare la parola mi serve Parakeet. Scaricalo dalla luce bianca sotto l'avatar (o Impostazioni → Modelli), poi riapri questa finestra");
             foreach (var f in file) _registrazioni.Add((f, "(da riascoltare quando c'è Parakeet)"));
             Riempi();
             return;
@@ -133,7 +133,7 @@ public sealed class FinestraParola : Window
             var dispositivo = Dispositivi.Microfono(_ponte.Impostazioni.Microfono);
             if (dispositivo is null)
             {
-                _esito.Text = Testo.FalloTu("non trovo un microfono. Collegalo, o sceglilo nel Mainframe → Orecchie");
+                _esito.Text = Testo.FalloTu("non trovo un microfono. Collegalo, o sceglilo in Impostazioni → Orecchie");
                 return;
             }
             _esito.Text = "Parla adesso: «" + _ponte.Impostazioni.ParolaSveglia + "»…";

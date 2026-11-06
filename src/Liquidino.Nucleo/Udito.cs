@@ -103,6 +103,15 @@ public sealed class Orecchie
     public TimeSpan FinestraEco { get; init; } = TimeSpan.FromSeconds(8);
     public double SogliaEco { get; init; } = 0.75;
 
+    public bool GiaDallaChiamata(string testo, DateTimeOffset ora)
+    {
+        if (ParolaSveglia.Chiave(testo).Length < 4) return false;
+        var chiamata = Registro.Righe(ora)
+            .Where(r => r.Fonte == FonteAscolto.Chiamata && ora - r.Quando <= FinestraEco)
+            .Select(r => r.Testo).ToList();
+        return chiamata.Count > 0 && ParolaSveglia.Contenuto(testo, string.Join(" ", chiamata)) >= SogliaEco;
+    }
+
     /// <summary>
     /// Il microfono ha sentito quello che è appena uscito dalle casse (un video, un amico in chiamata)?
     /// Allora non è la tua voce: non sveglia e non comanda.
@@ -126,6 +135,8 @@ public sealed class Orecchie
         switch (fonte)
         {
             case FonteAscolto.Pc:
+                // L'audio di tutto il PC contiene anche la chiamata: se è già arrivata da lì, non si conta due volte.
+                if (GiaDallaChiamata(testo, ora)) return DecisioneOrecchio.Niente;
                 Registro.Aggiungi(new RigaSentita(ora, fonte, chi, testo));
                 return DecisioneOrecchio.Niente;
             case FonteAscolto.Chiamata:

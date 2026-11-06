@@ -17,6 +17,6 @@ public static class OrecchioLeggero
         var tarata = ParolaSveglia.Carica(parola, radiceDati);
         return new StatoOrecchio(true, tarata.Tarata
             ? "Accendi le Orecchie (👂) e chiamami «" + parola + "»: la parola è tarata su " + tarata.Registrazioni + " tue registrazioni."
-            : "Accendi le Orecchie (👂) e chiamami «" + parola + "». Se registri la parola qualche volta (Mainframe → Orecchie), ti sento meglio.");
+            : "Accendi le Orecchie (👂) e chiamami «" + parola + "». Se registri la parola qualche volta (Impostazioni → Orecchie), ti sento meglio.");
     }
 }
