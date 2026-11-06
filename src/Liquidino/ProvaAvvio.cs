@@ -196,7 +196,8 @@ public static class ProvaAvvio
             ponte.Stop();
             ponte.Stop();
             await Attesa();
-            Verifica(ponte.Stato == StatoCompagno.Dorme, "dopo STOP dorme");
+            // STOP ferma il turno e scarica i modelli, ma non lo mette a dormire: dormire lo decidi tu con 🌙.
+            Verifica(ponte.Stato == StatoCompagno.Sveglio && ponte.Dormita is null && ponte.Regista.Accesi.Count == 0, "dopo STOP è sveglio, senza modelli accesi");
             riga("PASS due STOP di fila, la finestra risponde");
             casa.Close();
         }
