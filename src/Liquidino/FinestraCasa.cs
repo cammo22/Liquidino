@@ -220,6 +220,9 @@ public sealed class FinestraCasa : Window
         var corpo = new Grid();
         corpo.ColumnDefinitions.Add(new ColumnDefinition());
         corpo.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _colonne = corpo.ColumnDefinitions;
+        _chat = chat;
+        _pannelloMondo = mondo;
         corpo.Children.Add(chat);
         Grid.SetColumn(mondo, 1);
         corpo.Children.Add(mondo);
@@ -277,6 +280,25 @@ public sealed class FinestraCasa : Window
         var pila = new StackPanel();
         pila.Children.Add(new TextBlock { Text = chi, FontFamily = Stile.Marchio, FontSize = 10, Foreground = tuo ? Stile.OroP : Stile.MagentaP });
         pila.Children.Add(new TextBlock { Text = testo, FontFamily = Stile.Testo, FontSize = 17, Foreground = Stile.Inchiostro, TextWrapping = TextWrapping.Wrap, MaxWidth = 460 });
+        if (!tuo && _ponte.Impostazioni.MostraVoti)
+        {
+            // 👍 e 👎 in silenzio: lui non risponde, li tiene per allenarsi. Dopo il clic resta solo quello scelto.
+            var voti = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 0) };
+            foreach (var (segno, piace) in new[] { ("👍", true), ("👎", false) })
+            {
+                var t = new TextBlock { Text = segno, FontFamily = new FontFamily("Segoe UI Emoji"), FontSize = 13, Margin = new Thickness(6, 0, 0, 0), Opacity = 0.45, Cursor = Cursors.Hand, ToolTip = piace ? "Mi piace" : "Non mi piace" };
+                t.MouseLeftButtonUp += (_, _) =>
+                {
+                    _ponte.Vota("chat", testo, piace);
+                    foreach (var altro in voti.Children.OfType<TextBlock>()) altro.Visibility = altro == t ? Visibility.Visible : Visibility.Collapsed;
+                    t.Opacity = 1;
+                    t.Cursor = null;
+                    t.IsHitTestVisible = false;
+                };
+                voti.Children.Add(t);
+            }
+            pila.Children.Add(voti);
+        }
         b.Child = pila;
         _messaggi.Children.Add(b);
         _scorrimento.ScrollToEnd();
@@ -319,12 +341,43 @@ public sealed class FinestraCasa : Window
             throw new InvalidOperationException("l'anteprima del diario non si vede: " + _testoAnteprima.Text);
     }
 
-    public void MostraCreazioni()
+    ColumnDefinitionCollection? _colonne;
+    FrameworkElement? _chat;
+    FrameworkElement? _pannelloMondo;
+    double? _larghezzaMondo;
+
+    /// <summary>La chat, con il mondo accanto.</summary>
+    public void ModoChat()
     {
+        if (_chat is not null && _colonne is not null && _pannelloMondo is not null)
+        {
+            _chat.Visibility = Visibility.Visible;
+            _colonne[0].Width = new GridLength(1, GridUnitType.Star);
+            _colonne[1].Width = GridLength.Auto;
+            if (_larghezzaMondo is { } w) _pannelloMondo.Width = w;
+        }
+        Show();
+        Activate();
+        _input.Focus();
+    }
+
+    /// <summary>Solo il mondo, grande: note, pensieri, sogni, diario, memoria.</summary>
+    public void ModoMondo()
+    {
+        if (_chat is not null && _colonne is not null && _pannelloMondo is not null)
+        {
+            _larghezzaMondo ??= double.IsNaN(_pannelloMondo.Width) ? null : _pannelloMondo.Width;
+            _chat.Visibility = Visibility.Collapsed;
+            _colonne[0].Width = new GridLength(0);
+            _colonne[1].Width = new GridLength(1, GridUnitType.Star);
+            _pannelloMondo.Width = double.NaN;
+        }
         Show();
         Activate();
         _lista.Focus();
     }
+
+    public void MostraCreazioni() => ModoMondo();
 
     public void InviaVoce(byte[] wav) => _ = Gira(() => _ponte.DaAudio(wav));
 

@@ -225,7 +225,7 @@ public class ProveNucleo
     }
 
     [Fact]
-    public async Task Di_notte_il_ciclo_non_scrive_e_di_giorno_si()
+    public async Task Il_ciclo_non_ha_orari_ma_col_pc_occupato_aspetta()
     {
         var radice = Temporanea();
         var imp = Impostazioni(radice);
@@ -234,8 +234,9 @@ public class ProveNucleo
         var mondo = new Mondo(radice);
         mondo.Prepara();
         var ciclo = new CicloAutonomo(imp, mondo, new Registro(radice), new RegistaFinto());
+        // Il sonno ora lo decidi tu: alle 23:30 scrive come alle 10.
         var notte = await ciclo.Gira(new DateTimeOffset(2026, 11, 3, 23, 30, 0, TimeSpan.Zero), false, CancellationToken.None);
-        Assert.False(notte.Fatto);
+        Assert.True(notte.Fatto);
         var giorno = await ciclo.Gira(new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero), false, CancellationToken.None);
         Assert.True(giorno.Fatto);
         Assert.NotNull(giorno.File);

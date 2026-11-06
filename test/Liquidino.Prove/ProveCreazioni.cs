@@ -190,7 +190,7 @@ public class ProveNomiNote
 public class ProvePensieroChiesto
 {
     [Fact]
-    public async Task Il_pensiero_chiesto_passa_anche_di_notte_e_col_ciclo_spento()
+    public async Task Il_pensiero_chiesto_passa_anche_col_ciclo_spento_e_il_pc_occupato()
     {
         var radice = Aiuti.Temporanea();
         var imp = Aiuti.Impostazioni(radice);
@@ -201,6 +201,6 @@ public class ProvePensieroChiesto
         Assert.False((await ciclo.Gira(notte, true, CancellationToken.None)).Fatto);
         var chiesto = await ciclo.Gira(notte, true, CancellationToken.None, richiesto: true);
         Assert.True(chiesto.Fatto);
-        Assert.False(chiesto.Parla); // di notte non parla comunque
+        Assert.True(chiesto.Parla); // chiesto da te: lo legge ad alta voce, se la voce è accesa
     }
 }

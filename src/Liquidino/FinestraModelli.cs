@@ -1,208 +1,225 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
 using Liquidino.Nucleo;
+using Ellipse = System.Windows.Shapes.Ellipse;
 
 namespace Liquidino;
 
 /// <summary>
-/// Tutti i modelli di Liquidino in una pagina: a cosa serve ognuno, se c'è, quanto pesa.
-/// Scarica (solo col tuo clic e il tuo sì), Elimina (nel Cestino di Windows) e le cartelle a portata di mano.
+/// Tutti i modelli in una tabella compatta, una riga ciascuno: luce, nome, a cosa serve, stato e tasti.
+/// Sta in una schermata. La usano la finestra Modelli e la scheda Modelli delle impostazioni.
 /// </summary>
-public sealed class FinestraModelli : Window
+public sealed class PannelloModelli : DockPanel
 {
     readonly Ponte _ponte;
-    readonly StackPanel _elenco = new();
-    readonly TextBlock _stato;
+    readonly StackPanel _righe = new();
     readonly TextBlock _esito;
-    CancellationTokenSource? _download;
+    readonly TextBlock _dove;
 
-    internal int Schede => _elenco.Children.Count;
+    public int Righe => _righe.Children.Count;
 
-    public FinestraModelli(Ponte ponte)
+    public PannelloModelli(Ponte ponte)
     {
         _ponte = ponte;
-        Title = "Modelli";
-        Width = 820;
-        Height = 760;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = System.Windows.Media.Brushes.Transparent;
-        Topmost = true;
-        ResizeMode = ResizeMode.NoResize;
-
-        _stato = Mainframe.Nota("");
         _esito = Mainframe.Nota("");
-        _esito.Foreground = Mainframe.CianoP;
+        _esito.Foreground = Stile.CianoP;
+        _dove = Mainframe.Nota("");
 
-        var spiegazione = Mainframe.Nota(
-            "I modelli sono i «cervelli» di Liquidino: file GGUF di Liquid AI che girano sul tuo PC con llama.cpp. " +
-            "Ognuno fa un mestiere: qui sotto c'è scritto quale. Non serve averli tutti: per parlare bastano Omni oppure LFM3-1.7B. " +
-            "Niente si scarica da solo: Scarica chiede prima il tuo sì e dice quanto pesa. I file arrivano da huggingface.co, " +
-            "da una revisione fissata, e si installano solo se la loro impronta SHA-256 è quella dichiarata. Elimina li manda nel Cestino di Windows.");
-        spiegazione.Foreground = Stile.Inchiostro;
-        spiegazione.FontSize = 15;
-
-        var cartelle = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        var modelli = Mainframe.Tasto("Cartella dei modelli");
-        modelli.Click += (_, _) => Apri(_ponte.Regista.Rilevazione.CartellaModelli);
-        var motore = Mainframe.Tasto("Cartella del motore");
-        motore.Click += (_, _) => Apri(_ponte.Impostazioni.CartellaMotore);
-        var dati = Mainframe.Tasto("Cartella dei dati");
-        dati.ToolTip = Percorsi.RadiceDati();
-        dati.Click += (_, _) => Apri(Percorsi.RadiceDati());
-        var programma = Mainframe.Tasto("Cartella del programma");
-        programma.ToolTip = AppContext.BaseDirectory;
-        programma.Click += (_, _) => Apri(AppContext.BaseDirectory);
-        foreach (var t in new[] { modelli, motore, dati, programma }) cartelle.Children.Add(t);
-
-        var testa = Mainframe.Sezione("Dove stanno", out var dove);
-        dove.Children.Add(spiegazione);
-        dove.Children.Add(_stato);
-        dove.Children.Add(cartelle);
-
-        var corpo = new StackPanel { Margin = new Thickness(20, 0, 20, 0) };
-        corpo.Children.Add(testa);
-        corpo.Children.Add(_elenco);
-
-        var chiudi = Mainframe.Tasto("Chiudi", pericolo: true);
-        chiudi.Click += (_, _) => Close();
-        var testata = Mainframe.Testata("MODELLI", chiudi);
-        var piede = new Border { Margin = new Thickness(20, 4, 20, 12), Child = _esito };
-
-        var tutto = new DockPanel();
-        DockPanel.SetDock(testata, Dock.Top);
-        DockPanel.SetDock(piede, Dock.Bottom);
-        tutto.Children.Add(testata);
-        tutto.Children.Add(piede);
-        tutto.Children.Add(new ScrollViewer { Content = corpo, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        Content = Mainframe.Cornice(tutto);
-
-        Riempi();
-        Closing += (_, _) => _download?.Cancel();
-        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
-        MouseLeftButtonDown += (_, e) =>
+        var spiega = Mainframe.Nota("Luce piena: acceso in memoria. Luce vuota: installato, spento. Tratteggio: da scaricare. "
+            + "Si scarica solo col tuo clic e il tuo sì, da huggingface.co, e si installa solo se l'impronta torna. Elimina manda nel Cestino.");
+        var cartelle = new WrapPanel();
+        foreach (var (nome, dove) in new (string, Func<string>)[]
+                 {
+                     ("Cartella dei modelli", () => _ponte.Regista.Rilevazione.CartellaModelli),
+                     ("Cartella del motore", () => _ponte.Impostazioni.CartellaMotore),
+                     ("Cartella dei dati", Percorsi.RadiceDati),
+                     ("Cartella del programma", () => AppContext.BaseDirectory)
+                 })
         {
-            if (e.OriginalSource is Button) return;
-            try { DragMove(); } catch { /* già rilasciato */ }
-        };
+            var t = Mainframe.Tasto(nome);
+            t.Click += (_, _) => Apri(dove());
+            cartelle.Children.Add(t);
+        }
+        var testa = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+        testa.Children.Add(spiega);
+        testa.Children.Add(_dove);
+        testa.Children.Add(cartelle);
+        SetDock(testa, Dock.Top);
+        SetDock(_esito, Dock.Bottom);
+        Children.Add(testa);
+        Children.Add(_esito);
+        Children.Add(new Border { Background = Mainframe.BandaP, CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 4, 6, 4), Child = _righe });
+
+        _ponte.ModelliCambiati += Riempi;
+        Unloaded += (_, _) => _ponte.ModelliCambiati -= Riempi;
+        Riempi();
     }
 
     void Riempi()
     {
         var r = _ponte.Regista.Rilevazione;
-        _stato.Text = (r.Eseguibile is null
-                ? "Motore: llama-server non trovato in " + _ponte.Impostazioni.CartellaMotore + ". Senza motore i modelli non partono: indica la cartella giusta nel Mainframe."
-                : "Motore: " + r.Eseguibile + ".")
-            + " Modelli in: " + r.CartellaModelli + ".";
-        _elenco.Children.Clear();
-        foreach (var scheda in CatalogoModelli.Tutti)
-            _elenco.Children.Add(Scheda(scheda, r.Modelli.FirstOrDefault(m => m.Ruolo == scheda.Ruolo), r.CartellaModelli));
-        _elenco.Children.Add(Scheda(CatalogoOrecchio.Parakeet, r.CartellaModelli));
+        _dove.Text = (r.Eseguibile is null ? "llama-server non trovato in " + _ponte.Impostazioni.CartellaMotore + "." : "Motore: " + r.Eseguibile + ".")
+                     + " Modelli in: " + r.CartellaModelli + "." + (_ponte.Regista.InPausa ? " In pausa: niente si carica da solo." : "");
+        _righe.Children.Clear();
+        foreach (var s in CatalogoModelli.Tutti)
+            _righe.Children.Add(RigaLfm(s, r.Modelli.FirstOrDefault(m => m.Ruolo == s.Ruolo), r.CartellaModelli));
+        _righe.Children.Add(RigaFissa(CatalogoOrecchio.Parakeet, r.CartellaModelli));
     }
 
-    /// <summary>Un modello fatto di file fissi (Parakeet): stessa scheda, stessi tasti.</summary>
-    Border Scheda(SchedaFissa scheda, string cartellaModelli)
+    static string ColoreDi(RuoloModello r) => r switch
     {
-        var sezione = Mainframe.Sezione(scheda.Nome + "  ·  orecchie", out var righe);
-        righe.Children.Add(Mainframe.Nota(scheda.APerCosa));
-        var presente = scheda.Presente(cartellaModelli);
-        long peso = 0;
-        if (presente)
-            foreach (var f in scheda.File) peso += new FileInfo(Path.Combine(scheda.Cartella(cartellaModelli), f)).Length;
-        righe.Children.Add(Mainframe.Riga("Stato", new TextBlock
+        RuoloModello.Mani => Stile.Oro,
+        RuoloModello.Omni => Stile.Magenta,
+        RuoloModello.D1 => Stile.Ciano,
+        RuoloModello.Vl => Stile.Ambra,
+        RuoloModello.Audio => Stile.Verde,
+        _ => "#b48cff"
+    };
+
+    Grid Riga(string colore, bool acceso, bool presente, string nome, string ruolo, string aCosa, string stato, params Button[] tasti)
+    {
+        var g = new Grid { Margin = new Thickness(0, 1, 0, 1), MinHeight = 34 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var pennello = Stile.Pennello(colore);
+        var luce = new Ellipse
         {
-            Text = presente ? "installato · " + scheda.NomeCartella + " · " + CatalogoModelli.Peso(peso) : "non installato",
-            FontFamily = Stile.Testo,
-            FontSize = 15,
-            Foreground = presente ? Mainframe.CianoP : Stile.Inchiostro2,
-            TextWrapping = TextWrapping.Wrap
-        }));
-        righe.Children.Add(Mainframe.Riga("Da", new TextBlock
+            Width = 12,
+            Height = 12,
+            Fill = acceso ? pennello : presente ? new SolidColorBrush(Color.FromArgb(60, pennello.Color.R, pennello.Color.G, pennello.Color.B)) : Brushes.Transparent,
+            Stroke = presente ? pennello : Stile.Inchiostro3,
+            StrokeThickness = 1.5,
+            StrokeDashArray = presente ? null : new DoubleCollection { 2, 2 },
+            Effect = acceso ? new DropShadowEffect { Color = pennello.Color, BlurRadius = 10, ShadowDepth = 0 } : null,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        g.Children.Add(luce);
+        var nomi = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        nomi.Children.Add(new TextBlock { Text = nome, FontFamily = Stile.Testo, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Stile.Inchiostro });
+        nomi.Children.Add(new TextBlock { Text = ruolo, FontFamily = Stile.Testo, FontSize = 12, Foreground = pennello });
+        Grid.SetColumn(nomi, 1);
+        g.Children.Add(nomi);
+        var cosa = new TextBlock { Text = aCosa, FontFamily = Stile.Testo, FontSize = 13, Foreground = Stile.Inchiostro2, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, ToolTip = aCosa, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(cosa, 2);
+        g.Children.Add(cosa);
+        var st = new TextBlock { Text = stato, FontFamily = Stile.Testo, FontSize = 13, Foreground = acceso ? pennello : presente ? Stile.Inchiostro : Stile.Inchiostro3, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = stato };
+        Grid.SetColumn(st, 3);
+        g.Children.Add(st);
+        var pannello = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var t in tasti) { t.Margin = new Thickness(4, 0, 0, 0); pannello.Children.Add(t); }
+        Grid.SetColumn(pannello, 4);
+        g.Children.Add(pannello);
+        return g;
+    }
+
+    Grid RigaLfm(SchedaCatalogo scheda, SchedaModello? installato, string cartellaModelli)
+    {
+        var acceso = _ponte.Regista.Accesi.Contains(scheda.Ruolo);
+        string stato;
+        var tasti = new List<Button>();
+        if (installato is null)
         {
-            Text = "huggingface.co/" + scheda.Repo,
-            FontFamily = Stile.Testo,
-            FontSize = 15,
-            Foreground = Stile.Inchiostro2,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        }, "Licenza CC-BY-4.0 (NVIDIA). Gira sulla CPU con sherpa-onnx: la scheda video resta ai modelli LFM3."));
-        var avanzamento = Mainframe.Nota("");
-        var tasti = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        if (!presente)
-        {
-            var scarica = Mainframe.Tasto("Scarica");
-            scarica.Click += async (_, _) => await ScaricaFissa(scheda, cartellaModelli, scarica, avanzamento);
-            tasti.Children.Add(scarica);
+            stato = "da scaricare";
+            var scarica = Mainframe.Tasto("Scarica", principale: true);
+            scarica.Click += async (_, _) => await Scarica(scheda, null);
+            tasti.Add(scarica);
         }
         else
         {
+            long peso = 0;
+            foreach (var f in new[] { installato.Percorso, installato.Mmproj })
+                if (!string.IsNullOrWhiteSpace(f) && File.Exists(f)) peso += new FileInfo(f).Length;
+            stato = (acceso ? "acceso · " : "spento · ") + CatalogoModelli.Peso(peso);
+            var accendi = Mainframe.Tasto(acceso ? "Spegni" : "Accendi");
+            accendi.Click += async (_, _) => _esito.Text = await _ponte.AlternaModello(scheda.Ruolo);
             var elimina = Mainframe.Tasto("Elimina", pericolo: true);
-            elimina.Click += async (_, _) => await EliminaFissa(scheda, cartellaModelli);
-            tasti.Children.Add(elimina);
-            var cartella = Mainframe.Tasto("Apri la sua cartella");
-            cartella.Click += (_, _) => Apri(scheda.Cartella(cartellaModelli));
-            tasti.Children.Add(cartella);
+            elimina.Click += async (_, _) => await EliminaLfm(scheda, installato, cartellaModelli);
+            tasti.Add(accendi);
+            tasti.Add(elimina);
         }
-        righe.Children.Add(tasti);
-        righe.Children.Add(avanzamento);
-        return sezione;
+        return Riga(ColoreDi(scheda.Ruolo), acceso, installato is not null, scheda.Nome, NomiModello.Etichetta(scheda.Ruolo),
+            scheda.APerCosa + (scheda.NelGiro ? "" : " (Non serve per usare Liquidino oggi.)"), stato, tasti.ToArray());
     }
 
-    async Task ScaricaFissa(SchedaFissa scheda, string cartellaModelli, Button tasto, TextBlock avanzamento)
+    Grid RigaFissa(SchedaFissa scheda, string cartellaModelli)
     {
-        if (_download is not null)
+        var presente = scheda.Presente(cartellaModelli);
+        var acceso = _ponte.Udito.Accese;
+        var tasti = new List<Button>();
+        string stato;
+        if (!presente)
         {
-            if (ReferenceEquals(tasto.Tag, "in corso")) { _download.Cancel(); avanzamento.Text = "Annullo…"; }
-            else _esito.Text = "Sto già scaricando un altro modello: aspetta che finisca.";
+            stato = "da scaricare";
+            var scarica = Mainframe.Tasto("Scarica", principale: true);
+            scarica.Click += async (_, _) => await Scarica(null, scheda);
+            tasti.Add(scarica);
+        }
+        else
+        {
+            long peso = 0;
+            foreach (var f in scheda.File) peso += new FileInfo(Path.Combine(scheda.Cartella(cartellaModelli), f)).Length;
+            stato = (acceso ? "acceso · " : "spento · ") + CatalogoModelli.Peso(peso);
+            var orecchie = Mainframe.Tasto(acceso ? "Spegni" : "Accendi");
+            orecchie.ToolTip = "Accende o spegne le Orecchie.";
+            orecchie.Click += async (_, _) => { await _ponte.AlternaOrecchie(); Riempi(); };
+            var elimina = Mainframe.Tasto("Elimina", pericolo: true);
+            elimina.Click += async (_, _) => await EliminaFissa(scheda, cartellaModelli);
+            tasti.Add(orecchie);
+            tasti.Add(elimina);
+        }
+        return Riga("#e7e0d2", acceso, presente, scheda.Nome, "orecchie · CPU", scheda.APerCosa, stato, tasti.ToArray());
+    }
+
+    async Task Scarica(SchedaCatalogo? lfm, SchedaFissa? fissa)
+    {
+        if (Scaricamenti.InCorso is not null)
+        {
+            Scaricamenti.Annulla();
+            _esito.Text = "Fermo il download…";
             return;
         }
-        _download = new CancellationTokenSource();
-        var ct = _download.Token;
-        tasto.Tag = "in corso";
-        tasto.Content = "Annulla";
+        _esito.Text = await Scaricamenti.Scarica(Window.GetWindow(this), _ponte, lfm, fissa, testo => Dispatcher.BeginInvoke(() => _esito.Text = testo + "  (premi un altro Scarica per fermarlo)"));
+        _ponte.Regista.Rileggi();
+        Riempi();
+    }
+
+    async Task EliminaLfm(SchedaCatalogo scheda, SchedaModello installato, string cartellaModelli)
+    {
+        var file = CatalogoModelli.FileDa(installato, cartellaModelli);
+        if (file.Count == 0)
+        {
+            _esito.Text = Testo.FalloTu(installato.NomeFile + " non sta nella cartella dei modelli, quindi non lo tocco");
+            return;
+        }
+        var domanda = "Elimino " + scheda.Nome + "?\n\n" + string.Join("\n", file.Select(f => "• " + Path.GetFileName(f)))
+                      + "\n\nI file vanno nel Cestino di Windows: se cambi idea li ripristini da lì.";
+        if (MessageBox.Show(Window.GetWindow(this)!, domanda, "Liquidino · Elimina", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         try
         {
-            using var scaricatore = new ScaricatoreModelli();
-            avanzamento.Text = "Chiedo a Hugging Face quali file ci sono…";
-            var scelta = await scaricatore.Prepara(scheda, ct);
-            if (scelta is null)
+            _esito.Text = "Spengo il motore, così i file si possono spostare…";
+            await _ponte.Regista.Ferma();
+            await Task.Run(() =>
             {
-                avanzamento.Text = "Questo fallo tu: in " + scheda.Repo + " manca uno dei file che servono (" + string.Join(", ", scheda.File) + "), o non ha l'impronta.";
-                return;
-            }
-            var domanda = "Scarico " + scheda.Nome + " da huggingface.co/" + scheda.Repo + ":\n\n"
-                + string.Join("\n", scelta.File.Select(f => "• " + f.Percorso + " (" + CatalogoModelli.Peso(f.Byte) + ")"))
-                + "\n\nTotale " + CatalogoModelli.Peso(scelta.Totale) + ", revisione " + scelta.Revisione[..7] + ".\nVa in " + scheda.Cartella(cartellaModelli) + ".\n\nProcedo?";
-            if (MessageBox.Show(this, domanda, "Liquidino · Scarica", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-            {
-                avanzamento.Text = "Va bene, non scarico niente.";
-                return;
-            }
-            _ponte.Registro.Scrivi("modelli", "scarico " + scheda.Nome + " (" + CatalogoModelli.Peso(scelta.Totale) + ")", "in corso");
-            var progresso = new Progress<Avanzamento>(a => avanzamento.Text = a.File + " · " + CatalogoModelli.Peso(a.Fatti) + " di " + CatalogoModelli.Peso(a.Totale)
-                + (a.Totale > 0 ? " · " + (int)(a.Fatti * 100 / a.Totale) + "%" : ""));
-            await scaricatore.Scarica(scelta, cartellaModelli, progresso, ct);
-            _ponte.Registro.Scrivi("modelli", "installato " + scheda.Nome, "ok");
-            _esito.Text = scheda.Nome + " è installato e controllato. Ora puoi accendere le Orecchie (👂) e registrare la parola nel Mainframe.";
+                foreach (var f in file)
+                    if (File.Exists(f)) Cestino(f);
+                var cartella = scheda.Cartella(cartellaModelli);
+                if (Directory.Exists(cartella) && !Directory.EnumerateFileSystemEntries(cartella).Any()) Directory.Delete(cartella);
+            });
+            _ponte.Registro.Scrivi("modelli", "eliminato " + scheda.Nome + " (nel Cestino)", "ok");
+            await _ponte.RicaricaMotore();
+            _esito.Text = scheda.Nome + " è nel Cestino di Windows.";
             Riempi();
-        }
-        catch (OperationCanceledException)
-        {
-            avanzamento.Text = "Annullato. Il file a metà è stato tolto.";
-            _ponte.Registro.Scrivi("modelli", "download di " + scheda.Nome + " annullato", "annullato");
         }
         catch (Exception e)
         {
-            avanzamento.Text = "Questo fallo tu: non sono riuscito a scaricarlo. " + e.Message;
-            _ponte.Registro.SegnaErrore("download " + scheda.Nome + ": " + e.Message);
-        }
-        finally
-        {
-            _download?.Dispose();
-            _download = null;
-            tasto.Tag = null;
-            if (tasto.IsLoaded) tasto.Content = "Scarica";
+            _esito.Text = Testo.FalloTu("non sono riuscito a eliminarlo. " + e.Message);
+            _ponte.Registro.SegnaErrore("elimina " + scheda.Nome + ": " + e.Message);
         }
     }
 
@@ -211,11 +228,10 @@ public sealed class FinestraModelli : Window
         var cartella = scheda.Cartella(cartellaModelli);
         if (!Percorsi.StaDentro(cartellaModelli, cartella)) return;
         var domanda = "Elimino " + scheda.Nome + "?\n\n" + string.Join("\n", scheda.File.Select(f => "• " + f))
-            + "\n\nLe Orecchie si spengono. I file vanno nel Cestino di Windows: se cambi idea li ripristini da lì.";
-        if (MessageBox.Show(this, domanda, "Liquidino · Elimina", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+                      + "\n\nLe Orecchie si spengono. I file vanno nel Cestino di Windows: se cambi idea li ripristini da lì.";
+        if (MessageBox.Show(Window.GetWindow(this)!, domanda, "Liquidino · Elimina", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         try
         {
-            _esito.Text = "Spengo le Orecchie e libero Parakeet…";
             // Parakeet tiene aperti i file: prima si chiude, poi si spostano.
             var eranoAccese = _ponte.Udito.Accese;
             await Task.Run(() => _ponte.Udito.Dispose());
@@ -227,8 +243,7 @@ public sealed class FinestraModelli : Window
             await Task.Run(() =>
             {
                 foreach (var f in scheda.File.Select(f => Path.Combine(cartella, f)))
-                    if (File.Exists(f) && Percorsi.StaDentro(cartella, f))
-                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(f, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                    if (File.Exists(f) && Percorsi.StaDentro(cartella, f)) Cestino(f);
                 if (Directory.Exists(cartella) && !Directory.EnumerateFileSystemEntries(cartella).Any()) Directory.Delete(cartella);
             });
             _ponte.Registro.Scrivi("modelli", "eliminato " + scheda.Nome + " (nel Cestino)", "ok");
@@ -237,157 +252,13 @@ public sealed class FinestraModelli : Window
         }
         catch (Exception e)
         {
-            _esito.Text = "Questo fallo tu: non sono riuscito a eliminarlo. " + e.Message;
+            _esito.Text = Testo.FalloTu("non sono riuscito a eliminarlo. " + e.Message);
             _ponte.Registro.SegnaErrore("elimina " + scheda.Nome + ": " + e.Message);
         }
     }
 
-    Border Scheda(SchedaCatalogo scheda, SchedaModello? installato, string cartellaModelli)
-    {
-        var sezione = Mainframe.Sezione(scheda.Nome + "  ·  " + NomiModello.Etichetta(scheda.Ruolo), out var righe);
-        righe.Children.Add(Mainframe.Nota(scheda.APerCosa + (scheda.NelGiro ? "" : " (Non serve per usare Liquidino oggi.)")));
-
-        string stato;
-        if (installato is null) stato = "non installato";
-        else
-        {
-            long peso = 0;
-            foreach (var f in new[] { installato.Percorso, installato.Mmproj })
-                if (!string.IsNullOrWhiteSpace(f) && File.Exists(f)) peso += new FileInfo(f).Length;
-            stato = "installato · " + installato.NomeFile + (installato.Mmproj is null ? "" : " + proiettore") + " · " + CatalogoModelli.Peso(peso);
-        }
-        righe.Children.Add(Mainframe.Riga("Stato", new TextBlock
-        {
-            Text = stato,
-            FontFamily = Stile.Testo,
-            FontSize = 15,
-            Foreground = installato is null ? Stile.Inchiostro2 : Mainframe.CianoP,
-            TextWrapping = TextWrapping.Wrap
-        }));
-        righe.Children.Add(Mainframe.Riga("Da", new TextBlock
-        {
-            Text = "huggingface.co/" + scheda.Repo,
-            FontFamily = Stile.Testo,
-            FontSize = 15,
-            Foreground = Stile.Inchiostro2,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        }));
-
-        var avanzamento = Mainframe.Nota("");
-        var tasti = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        if (installato is null)
-        {
-            var scarica = Mainframe.Tasto("Scarica");
-            scarica.Click += async (_, _) => await Scarica(scheda, cartellaModelli, scarica, avanzamento);
-            tasti.Children.Add(scarica);
-        }
-        else
-        {
-            var elimina = Mainframe.Tasto("Elimina", pericolo: true);
-            elimina.Click += async (_, _) => await Elimina(scheda, installato, cartellaModelli);
-            tasti.Children.Add(elimina);
-            var cartella = Mainframe.Tasto("Apri la sua cartella");
-            cartella.Click += (_, _) => Apri(Path.GetDirectoryName(installato.Percorso) ?? cartellaModelli);
-            tasti.Children.Add(cartella);
-        }
-        righe.Children.Add(tasti);
-        righe.Children.Add(avanzamento);
-        return sezione;
-    }
-
-    async Task Scarica(SchedaCatalogo scheda, string cartellaModelli, Button tasto, TextBlock avanzamento)
-    {
-        if (_download is not null)
-        {
-            if (ReferenceEquals(tasto.Tag, "in corso")) { _download.Cancel(); avanzamento.Text = "Annullo…"; }
-            else _esito.Text = "Sto già scaricando un altro modello: aspetta che finisca.";
-            return;
-        }
-        _download = new CancellationTokenSource();
-        var ct = _download.Token;
-        tasto.Tag = "in corso";
-        tasto.Content = "Annulla";
-        try
-        {
-            using var scaricatore = new ScaricatoreModelli();
-            avanzamento.Text = "Chiedo a Hugging Face quali file ci sono…";
-            var scelta = await scaricatore.Prepara(scheda, ct);
-            if (scelta is null)
-            {
-                avanzamento.Text = "Questo fallo tu: in " + scheda.Repo + " non trovo un GGUF da scaricare. Mettilo a mano nella cartella dei modelli.";
-                return;
-            }
-            var domanda = "Scarico " + scheda.Nome + " da huggingface.co/" + scheda.Repo + ":\n\n"
-                + "• " + scelta.Pesi.Percorso + " (" + CatalogoModelli.Peso(scelta.Pesi.Byte) + ")\n"
-                + (scelta.Proiettore is null ? "" : "• " + scelta.Proiettore.Percorso + " (" + CatalogoModelli.Peso(scelta.Proiettore.Byte) + ")\n")
-                + "\nTotale " + CatalogoModelli.Peso(scelta.Totale) + ", revisione " + scelta.Revisione[..7] + ".\nVa in " + scheda.Cartella(cartellaModelli) + ".\n\nProcedo?";
-            if (MessageBox.Show(this, domanda, "Liquidino · Scarica", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-            {
-                avanzamento.Text = "Va bene, non scarico niente.";
-                return;
-            }
-            _ponte.Registro.Scrivi("modelli", "scarico " + scheda.Nome + " (" + CatalogoModelli.Peso(scelta.Totale) + ")", "in corso");
-            var progresso = new Progress<Avanzamento>(a => avanzamento.Text = a.File + " · " + CatalogoModelli.Peso(a.Fatti) + " di " + CatalogoModelli.Peso(a.Totale)
-                + (a.Totale > 0 ? " · " + (int)(a.Fatti * 100 / a.Totale) + "%" : ""));
-            await scaricatore.Scarica(scelta, cartellaModelli, progresso, ct);
-            _ponte.Registro.Scrivi("modelli", "installato " + scheda.Nome, "ok");
-            _esito.Text = scheda.Nome + " è installato e controllato. Riaccendo il motore perché lo trovi.";
-            await _ponte.RicaricaMotore();
-            Riempi();
-        }
-        catch (OperationCanceledException)
-        {
-            avanzamento.Text = "Annullato. Il file a metà è stato tolto.";
-            _ponte.Registro.Scrivi("modelli", "download di " + scheda.Nome + " annullato", "annullato");
-        }
-        catch (Exception e)
-        {
-            avanzamento.Text = "Questo fallo tu: non sono riuscito a scaricarlo. " + e.Message;
-            _ponte.Registro.SegnaErrore("download " + scheda.Nome + ": " + e.Message);
-        }
-        finally
-        {
-            _download?.Dispose();
-            _download = null;
-            tasto.Tag = null;
-            if (tasto.IsLoaded) tasto.Content = "Scarica";
-        }
-    }
-
-    async Task Elimina(SchedaCatalogo scheda, SchedaModello installato, string cartellaModelli)
-    {
-        var file = CatalogoModelli.FileDa(installato, cartellaModelli);
-        if (file.Count == 0)
-        {
-            _esito.Text = "Questo fallo tu: " + installato.NomeFile + " non sta nella cartella dei modelli, quindi non lo tocco.";
-            return;
-        }
-        var domanda = "Elimino " + scheda.Nome + "?\n\n" + string.Join("\n", file.Select(f => "• " + Path.GetFileName(f)))
-            + "\n\nI file vanno nel Cestino di Windows: se cambi idea li ripristini da lì.";
-        if (MessageBox.Show(this, domanda, "Liquidino · Elimina", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        try
-        {
-            _esito.Text = "Spengo il motore, così i file si possono spostare…";
-            await _ponte.Regista.Ferma();
-            await Task.Run(() =>
-            {
-                foreach (var f in file)
-                    if (File.Exists(f))
-                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(f, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                var cartella = scheda.Cartella(cartellaModelli);
-                if (Directory.Exists(cartella) && !Directory.EnumerateFileSystemEntries(cartella).Any()) Directory.Delete(cartella);
-            });
-            _ponte.Registro.Scrivi("modelli", "eliminato " + scheda.Nome + " (nel Cestino)", "ok");
-            _esito.Text = scheda.Nome + " è nel Cestino di Windows.";
-            await _ponte.RicaricaMotore();
-            Riempi();
-        }
-        catch (Exception e)
-        {
-            _esito.Text = "Questo fallo tu: non sono riuscito a eliminarlo. " + e.Message;
-            _ponte.Registro.SegnaErrore("elimina " + scheda.Nome + ": " + e.Message);
-        }
-    }
+    static void Cestino(string file) =>
+        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(file, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
 
     void Apri(string cartella)
     {
@@ -397,6 +268,38 @@ public sealed class FinestraModelli : Window
             Directory.CreateDirectory(cartella);
             using (Process.Start(new ProcessStartInfo("explorer.exe", "\"" + cartella + "\"") { UseShellExecute = true })) { }
         }
-        catch (Exception e) { _esito.Text = "Questo fallo tu: non riesco ad aprire " + cartella + ". " + e.Message; }
+        catch (Exception e) { _esito.Text = Testo.FalloTu("non riesco ad aprire " + cartella + ". " + e.Message); }
+    }
+}
+
+/// <summary>La finestra Modelli: la stessa tabella delle impostazioni, da sola.</summary>
+public sealed class FinestraModelli : Window
+{
+    readonly PannelloModelli _pannello;
+
+    internal int Schede => _pannello.Righe;
+
+    public FinestraModelli(Ponte ponte)
+    {
+        Title = "Modelli";
+        Width = 960;
+        Height = 520;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        WindowStyle = WindowStyle.None;
+        AllowsTransparency = true;
+        Background = Brushes.Transparent;
+        Topmost = true;
+        ResizeMode = ResizeMode.NoResize;
+        _pannello = new PannelloModelli(ponte) { Margin = new Thickness(14, 10, 14, 10) };
+        var chiudi = Stile.Bottone("Chiudi");
+        chiudi.Click += (_, _) => Close();
+        var testata = Mainframe.Testata("modelli", chiudi);
+        testata.MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch { /* già rilasciato */ } };
+        var tutto = new DockPanel();
+        DockPanel.SetDock(testata, Dock.Top);
+        tutto.Children.Add(testata);
+        tutto.Children.Add(_pannello);
+        Content = Mainframe.Cornice(tutto);
+        KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) Close(); };
     }
 }

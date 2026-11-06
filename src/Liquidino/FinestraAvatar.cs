@@ -5,6 +5,8 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Ellipse = System.Windows.Shapes.Ellipse;
 using Liquidino.Nucleo;
@@ -14,7 +16,8 @@ namespace Liquidino;
 /// <summary>
 /// L'avatar sul desktop: finestra trasparente, sempre davanti, trascinabile.
 /// Gli stati sono dorme, ascolta, pensa, parla. Fra uno e l'altro resta sveglio.
-/// Clic: chat e creazioni. Vicino: permesso del PC e STOP.
+/// Sotto: le luci dei modelli (accesi, spenti, da scaricare) e i tasti, ognuno col suo nome.
+/// In pausa l'avatar è in bianco e nero e niente si carica da solo.
 /// </summary>
 public sealed class FinestraAvatar : Window
 {
@@ -27,17 +30,12 @@ public sealed class FinestraAvatar : Window
     readonly Button _parla;
     readonly Button _permesso;
     readonly Button _orecchie;
-    readonly Button _chiamata;
+    readonly Button _pausa;
     readonly Button _stop;
     readonly Button _dormi;
     readonly Button[] _tasti;
-    readonly WrapPanel _servizi;
-    readonly Border _chipAscolto;
-    readonly Border _chipD1;
-    readonly Border _chipVoce;
-    readonly Border _chipMani;
-    readonly Border _chipVl;
-    readonly Border _chipPc;
+    readonly WrapPanel _luci;
+    string? _scaricando;
     bool _sopra;
     bool _domandaAperta;
     readonly DispatcherTimer _orologio;
@@ -64,54 +62,37 @@ public sealed class FinestraAvatar : Window
         ShowActivated = false;
         AllowDrop = true;
 
-        _parla = Stile.Icona("🎤", "Parla: un clic per ascoltare, un altro per mandare.");
-        _permesso = Stile.Icona("🖥️", TestoPermesso(false));
-        _orecchie = Stile.Icona("👂", TestoOrecchie(false));
-        _chiamata = Stile.Icona("📞", TestoChiamata(false));
-        _stop = Stile.Icona("⏹", "STOP: ferma il turno e scarica i modelli.", pericolo: true);
-        var chat = Stile.Icona("💬", "Apri la chat.", principale: true);
-        var creazioni = Stile.Icona("✨", "Apri le creazioni.");
-        _dormi = Stile.Icona("🌙", "Dormi, o svegliati se sta già dormendo.");
-        var impostazioni = Stile.Icona("⚙", "Impostazioni.");
-        var nota = Stile.Icona("📝", "Nota veloce, senza aprire la chat.");
-        var ore = Stile.Icona("🕐", "Che ore sono.");
-        var pensiero = Stile.Icona("💭", "Un pensiero adesso, nella sua cartella.");
+        _parla = Tasto("🎤", "Parla", "Parla una volta: un clic e ti ascolto, un altro clic e mando la frase. Anche Ctrl+Spazio.");
+        _orecchie = Tasto("👂", "Orecchie", TestoOrecchie(false));
+        _permesso = Tasto("🖥️", "Mani", TestoPermesso(false));
+        _pausa = Tasto("⏸", "Pausa", TestoPausa(false));
+        _stop = Tasto("⏹", "STOP", "STOP: ferma tutto, spegne le Orecchie e scarica i modelli.", pericolo: true);
+        var chat = Tasto("💬", "Chat", "Apri la chat.", principale: true);
+        var mondo = Tasto("🗂", "Mondo", "Apri il tuo mondo: note, pensieri, sogni, diario e memoria.");
+        _dormi = Tasto("🌙", "Dormi", "");
+        var impostazioni = Tasto("⚙", "Impost.", "Impostazioni: tutto quello che si può cambiare, e i modelli.");
         _parla.Click += (_, _) => _ponte.AlternaAscolto();
-        _permesso.Click += (_, _) => _ponte.AlternaPermesso();
         _orecchie.Click += async (_, _) => await _ponte.AlternaOrecchie();
-        _chiamata.Click += async (_, _) => await _ponte.AlternaChiamata();
+        _permesso.Click += (_, _) => _ponte.AlternaPermesso();
+        _pausa.Click += async (_, _) => await _ponte.AlternaPausa();
         _stop.Click += (_, _) => _ponte.Stop();
-        chat.Click += (_, _) => ApriCasa();
-        creazioni.Click += (_, _) => ApriCasa().MostraCreazioni();
-        _dormi.Click += (_, _) =>
-        {
-            if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio);
-            else _ponte.Stop();
-        };
+        chat.Click += (_, _) => ApriCasa().ModoChat();
+        mondo.Click += (_, _) => ApriCasa().ModoMondo();
+        _dormi.Click += (_, _) => _ponte.AlternaSonno();
+        _dormi.ToolTipOpening += (_, _) => _dormi.ToolTip = TestoDormi();
         impostazioni.Click += (_, _) => new FinestraImpostazioni(_ponte).ShowDialog();
-        nota.Click += (_, _) => ChiediNota();
-        ore.Click += async (_, _) => await _ponte.Messaggio("che ore sono");
-        pensiero.Click += async (_, _) => await _ponte.PensieroAdesso();
-        _tasti = [_parla, _orecchie, chat, creazioni, _permesso, _chiamata, _stop, _dormi, impostazioni, nota, ore, pensiero];
+        _tasti = [chat, mondo, _parla, _orecchie, _dormi, _permesso, _pausa, impostazioni, _stop];
 
         var zona = new Grid { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) };
         zona.Children.Add(_figura);
         zona.Children.Add(_led);
         zona.MouseLeftButtonDown += InizioTrascinamento;
 
-        _servizi = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
-        _chipAscolto = Chip("orecchio", Stile.Verde);
-        _chipD1 = Chip("d1", Stile.Ciano);
-        _chipVoce = Chip("voce", Stile.Magenta);
-        _chipMani = Chip("mani", Stile.Oro);
-        _chipVl = Chip("occhi", Stile.Ambra);
-        _chipPc = Chip("pc", Stile.Rosso);
-        foreach (var c in new[] { _chipAscolto, _chipD1, _chipVoce, _chipMani, _chipVl, _chipPc })
-            _servizi.Children.Add(c);
+        _luci = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
 
         var comandi = new WrapPanel
         {
-            Width = 280,
+            Width = 300,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 4, 0, 0)
         };
@@ -120,9 +101,11 @@ public sealed class FinestraAvatar : Window
         AggiornaPermesso();
         AggiornaParla();
         AggiornaOrecchie();
+        AggiornaDormi();
+        AggiornaLuci();
 
         var sotto = new StackPanel();
-        sotto.Children.Add(_servizi);
+        sotto.Children.Add(_luci);
         sotto.Children.Add(comandi);
 
         var radice = new Grid { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) };
@@ -160,7 +143,21 @@ public sealed class FinestraAvatar : Window
         ponte.PermessoCambiato += () => SulFilo(AggiornaPermesso);
         ponte.OrecchieCambiate += () => SulFilo(AggiornaOrecchie);
         ponte.AscoltoCambiato += () => SulFilo(AggiornaParla);
-        ponte.Pensiero += testo => SulFilo(() => MostraBolla(testo));
+        ponte.Pensiero += testo => SulFilo(() => MostraVotabile(testo, "pensiero"));
+        ponte.Sognato += sogno => SulFilo(() => MostraVotabile("💤 " + sogno, "sogno"));
+        ponte.ModelliCambiati += () => SulFilo(() => { AggiornaLuci(); AggiornaPausa(); });
+        ponte.SonnoCambiato += () => SulFilo(AggiornaDormi);
+        ponte.ImpostazioniSalvate += () => SulFilo(() =>
+        {
+            if (_foglio?.Nome != _ponte.Impostazioni.AvatarOggetto && FoglioAvatar.Carica(_ponte.Impostazioni.AvatarOggetto) is { } nuovo)
+            {
+                _foglio = nuovo;
+                Suona(AnimazioneDi(_ponte.Stato));
+            }
+            CambiaScala(_ponte.Impostazioni.AvatarScala);
+            AggiornaOrecchie();
+            AggiornaLuci();
+        });
         ponte.Annuncio += testo => SulFilo(() => MostraBolla(testo));
         ponte.Risposto += esito => SulFilo(() => MostraEsito(esito));
         ponte.VocePronta += wav => SulFilo(async () => await _ponte.DaAudio(wav));
@@ -235,7 +232,6 @@ public sealed class FinestraAvatar : Window
 
     public FinestraCasa ApriCasa()
     {
-        if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio);
         if (_ponte.Casa is { IsLoaded: true } gia)
         {
             gia.Show();
@@ -266,7 +262,7 @@ public sealed class FinestraAvatar : Window
         _ponte.Impostazioni.AvatarX = Left;
         _ponte.Impostazioni.AvatarY = Top;
         _ = Task.Run(() => _ponte.Impostazioni.Salva());
-        if (!_trascinato && e.ClickCount < 3) ApriCasa();
+        if (!_trascinato && e.ClickCount < 3) ApriCasa().ModoChat();
     }
 
     void ApplicaStato(StatoCompagno stato)
@@ -306,7 +302,37 @@ public sealed class FinestraAvatar : Window
         if (_foglio is null || !_foglio.Ha(nome)) nome = "idle";
         _animazione = nome;
         _frame = 0;
-        _figura.Source = _foglio?.Fotogramma(nome, 0);
+        _figura.Source = Colore(_foglio?.Fotogramma(nome, 0));
+    }
+
+    /// <summary>In pausa l'avatar è in bianco e nero: si vede subito che non carica niente da solo.</summary>
+    ImageSource? Colore(ImageSource? fotogramma)
+    {
+        if (fotogramma is not BitmapSource bitmap || !_ponte.Regista.InPausa) return fotogramma;
+        if (_grigi.TryGetValue(bitmap, out var gia)) return gia;
+        var grigio = Grigio(bitmap);
+        _grigi.Add(bitmap, grigio);
+        return grigio;
+    }
+
+    readonly System.Runtime.CompilerServices.ConditionalWeakTable<BitmapSource, BitmapSource> _grigi = new();
+
+    static BitmapSource Grigio(BitmapSource sorgente)
+    {
+        var bgra = new FormatConvertedBitmap(sorgente, PixelFormats.Bgra32, null, 0);
+        var larghezza = bgra.PixelWidth;
+        var altezza = bgra.PixelHeight;
+        var passo = larghezza * 4;
+        var pixel = new byte[passo * altezza];
+        bgra.CopyPixels(pixel, passo, 0);
+        for (var i = 0; i < pixel.Length; i += 4)
+        {
+            var l = (byte)Math.Round(pixel[i] * 0.114 + pixel[i + 1] * 0.587 + pixel[i + 2] * 0.299);
+            pixel[i] = pixel[i + 1] = pixel[i + 2] = l;
+        }
+        var uscita = BitmapSource.Create(larghezza, altezza, sorgente.DpiX, sorgente.DpiY, PixelFormats.Bgra32, null, pixel, passo);
+        uscita.Freeze();
+        return uscita;
     }
 
     void Avanti()
@@ -315,7 +341,7 @@ public sealed class FinestraAvatar : Window
         var n = _foglio.Quanti(_animazione);
         if (n <= 1) return;
         _frame = (_frame + 1) % n;
-        _figura.Source = _foglio.Fotogramma(_animazione, _frame);
+        _figura.Source = Colore(_foglio.Fotogramma(_animazione, _frame));
     }
 
     void Trasforma()
@@ -369,11 +395,162 @@ public sealed class FinestraAvatar : Window
 
     void AggiornaDormi()
     {
-        var dorme = _ponte.Stato == StatoCompagno.Dorme;
-        _dormi.Content = dorme ? "☀" : "🌙";
-        _dormi.ToolTip = dorme ? "Sveglia." : "Dormi, o svegliati se sta già dormendo.";
+        var dorme = _ponte.Dormita is not null;
+        ImpostaTasto(_dormi, dorme ? "☀" : "🌙", dorme ? "Sveglia" : "Dormi");
+        _dormi.ToolTip = TestoDormi();
         AggiornaServizi();
         MostraTasti();
+    }
+
+    string TestoDormi()
+    {
+        var d = _ponte.Dormita;
+        var complete = "Dormite complete: " + _ponte.Impostazioni.DormiteComplete + ".";
+        if (d is null)
+            return "Mettilo a dormire: sceglie lui quanto (al massimo " + Sonno.Leggibile(TimeSpan.FromMinutes(_ponte.Impostazioni.SonnoMassimoMinuti)) + ") e intanto sogna. " + complete;
+        return "Dorme ancora " + Sonno.Leggibile(d.Manca(DateTimeOffset.Now)) + " (sveglia alle " + d.Sveglia.ToString("HH:mm") + "), " + d.Sogni.Count + " sogni finora. Un clic per svegliarlo: non conta come dormita completa. " + complete;
+    }
+
+    void AggiornaPausa()
+    {
+        var pausa = _ponte.Regista.InPausa;
+        _pausa.BorderBrush = pausa ? Stile.Pennello("#e7e0d2") : Stile.Pennello("#3a3648");
+        _pausa.Foreground = pausa ? Stile.Pennello("#e7e0d2") : Stile.Inchiostro;
+        ImpostaTasto(_pausa, pausa ? "▶" : "⏸", pausa ? "Riprendi" : "Pausa");
+        _pausa.ToolTip = TestoPausa(pausa);
+        Suona(_animazione);
+    }
+
+    static string TestoPausa(bool pausa) => pausa
+        ? "In pausa: niente si carica da solo e l'avatar è in bianco e nero. Accendi un modello dalla sua luce, o un clic qui per riprendere."
+        : "Pausa: scarica i modelli e non ne carica più da solo, così non ti riempie la memoria all'improvviso. I modelli li accendi tu dalle luci.";
+
+    static Button Tasto(string simbolo, string etichetta, string tooltip, bool principale = false, bool pericolo = false)
+    {
+        var b = Stile.Icona(simbolo, tooltip, principale, pericolo);
+        b.Width = 56;
+        b.Padding = new Thickness(2, 3, 2, 2);
+        ImpostaTasto(b, simbolo, etichetta);
+        return b;
+    }
+
+    static void ImpostaTasto(Button b, string simbolo, string etichetta)
+    {
+        var pila = new StackPanel();
+        pila.Children.Add(new TextBlock { Text = simbolo, FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Segoe UI"), FontSize = 17, HorizontalAlignment = HorizontalAlignment.Center });
+        pila.Children.Add(new TextBlock { Text = etichetta, FontFamily = Stile.Testo, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, -1, 0, 0) });
+        b.Content = pila;
+    }
+
+    // ---------- le luci dei modelli ----------
+
+    static string ColoreDi(RuoloModello r) => r switch
+    {
+        RuoloModello.Mani => Stile.Oro,
+        RuoloModello.Omni => Stile.Magenta,
+        RuoloModello.D1 => Stile.Ciano,
+        RuoloModello.Vl => Stile.Ambra,
+        RuoloModello.Audio => Stile.Verde,
+        _ => "#b48cff"
+    };
+
+    void AggiornaLuci()
+    {
+        _luci.Children.Clear();
+        var accesi = _ponte.Regista.Accesi;
+        foreach (var scheda in CatalogoModelli.Tutti)
+        {
+            var presente = _ponte.Regista.Presente(scheda.Ruolo);
+            var acceso = accesi.Contains(scheda.Ruolo);
+            var stato = acceso ? "acceso, in memoria" : presente ? "installato, spento" : "non installato";
+            var azione = acceso ? "Clic: spegnilo e libera la memoria." : presente ? "Clic: accendilo adesso." : "Clic: scaricalo (ti chiedo prima il sì).";
+            var schedaPresa = scheda;
+            _luci.Children.Add(Luce(ColoreDi(scheda.Ruolo), acceso, presente,
+                scheda.Nome + " · " + NomiModello.Etichetta(scheda.Ruolo) + "\n" + scheda.APerCosa + "\n\nStato: " + stato + ".\n" + azione,
+                async () =>
+                {
+                    if (presente) MostraBolla(await _ponte.AlternaModello(schedaPresa.Ruolo));
+                    else await ScaricaDaLuce(schedaPresa, null);
+                }));
+        }
+        var parakeet = CatalogoOrecchio.Parakeet;
+        var cePa = _ponte.Udito.ParakeetPresente;
+        var orecchie = _ponte.Udito.Accese;
+        _luci.Children.Add(Luce("#e7e0d2", orecchie, cePa,
+            parakeet.Nome + " · orecchie\n" + parakeet.APerCosa + "\n\nStato: " + (orecchie ? "acceso (Orecchie accese)" : cePa ? "installato, spento" : "non installato") + ".\n"
+            + (cePa ? "Clic: " + (orecchie ? "spegni" : "accendi") + " le Orecchie." : "Clic: scaricalo (ti chiedo prima il sì)."),
+            async () =>
+            {
+                if (cePa) await _ponte.AlternaOrecchie();
+                else await ScaricaDaLuce(null, parakeet);
+            }));
+    }
+
+    FrameworkElement Luce(string colore, bool accesa, bool presente, string spiegazione, Func<Task> clic)
+    {
+        var pennello = Stile.Pennello(colore);
+        var punto = new Ellipse
+        {
+            Width = 13,
+            Height = 13,
+            Fill = accesa ? pennello : presente ? new SolidColorBrush(Color.FromArgb(60, pennello.Color.R, pennello.Color.G, pennello.Color.B)) : Brushes.Transparent,
+            Stroke = presente ? pennello : Stile.Pennello("#6f6b7d"),
+            StrokeThickness = 1.5,
+            StrokeDashArray = presente ? null : new DoubleCollection { 2, 2 },
+            Effect = accesa ? new DropShadowEffect { Color = pennello.Color, BlurRadius = 12, ShadowDepth = 0, Opacity = 0.95 } : null
+        };
+        var zona = new Border
+        {
+            Child = punto,
+            Padding = new Thickness(5),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            ToolTip = new ToolTip { Content = new TextBlock { Text = spiegazione, MaxWidth = 320, TextWrapping = TextWrapping.Wrap, FontFamily = Stile.Testo, FontSize = 14 } }
+        };
+        ToolTipService.SetInitialShowDelay(zona, 150);
+        ToolTipService.SetShowDuration(zona, 20000);
+        zona.MouseLeftButtonUp += async (_, e) =>
+        {
+            e.Handled = true;
+            try { await clic(); }
+            catch (Exception ex) { MostraBolla(Testo.FalloTu(ex.Message)); }
+        };
+        return zona;
+    }
+
+    async Task ScaricaDaLuce(SchedaCatalogo? lfm, SchedaFissa? fissa)
+    {
+        if (Scaricamenti.InCorso is { } gia)
+        {
+            MostraBolla("Sto scaricando " + gia + ". Vuoi fermarlo?", new[]
+            {
+                new SceltaBolla("Ferma", _ => Scaricamenti.Annulla()),
+                new SceltaBolla("Lascia", _ => { })
+            });
+            return;
+        }
+        var fine = await Scaricamenti.Scarica(this, _ponte, lfm, fissa, testo => SulFilo(() =>
+        {
+            _scaricando = testo;
+            if (_luci.Children.Count > 0) _luci.ToolTip = testo;
+        }));
+        _scaricando = null;
+        _luci.ToolTip = null;
+        _ponte.Regista.Rileggi();
+        AggiornaLuci();
+        MostraBolla(fine);
+    }
+
+    /// <summary>Un pensiero o un sogno, con 👍 e 👎. Lui non risponde: il voto va nella palestra.</summary>
+    void MostraVotabile(string testo, string fonte)
+    {
+        if (!_ponte.Impostazioni.MostraVoti || _domandaAperta) { MostraBolla(testo); return; }
+        var pulito = testo.StartsWith("💤 ", StringComparison.Ordinal) ? testo[3..] : testo;
+        MostraBolla(testo, new[]
+        {
+            new SceltaBolla("👍", _ => _ponte.Vota(fonte, pulito, true)),
+            new SceltaBolla("👎", _ => _ponte.Vota(fonte, pulito, false))
+        }, resta: false);
     }
 
     void AggiornaPermesso()
@@ -392,40 +569,19 @@ public sealed class FinestraAvatar : Window
         _orecchie.BorderBrush = accese ? Stile.VerdeP : Stile.Pennello("#3a3648");
         _orecchie.Foreground = accese ? Stile.VerdeP : Stile.Inchiostro;
         _orecchie.ToolTip = TestoOrecchie(accese);
-        _chiamata.BorderBrush = chiamata ? Stile.CianoP : Stile.Pennello("#3a3648");
-        _chiamata.Foreground = chiamata ? Stile.CianoP : Stile.Inchiostro;
-        _chiamata.ToolTip = TestoChiamata(chiamata);
+        _orecchie.ToolTip = TestoOrecchie(accese) + (chiamata ? " Adesso sento anche " + _ponte.Udito.NomeChiamata + " a parte." : "");
         AggiornaServizi();
     }
 
     string TestoOrecchie(bool accese) => accese
-        ? "Orecchie accese: mi chiami «" + _ponte.Impostazioni.ParolaSveglia + "» e ti rispondo. Sento anche l'audio del PC, senza la mia voce. Un clic per spegnerle."
-        : "Orecchie spente: non sento niente. Un clic per accenderle (serve Parakeet, dalla pagina Modelli).";
-
-    static string TestoChiamata(bool accesa) => accesa
-        ? "In chiamata: sento Discord a parte e, se l'hai acceso, la mia voce va nel tuo microfono (VB-CABLE). Un clic per uscire."
-        : "Modalità chiamata: entra in Discord, poi un clic qui. Chi mi chiama per nome riceve una risposta a voce, ma le mani le comandi solo tu.";
+        ? "Orecchie accese: sto sempre in ascolto del mio nome, «" + _ponte.Impostazioni.ParolaSveglia + "». Sento anche l'audio del PC (senza la mia voce) e, se Discord è aperto, la chiamata a parte. Un clic per spegnerle."
+        : "Orecchie: mi chiami per nome senza cliccare («" + _ponte.Impostazioni.ParolaSveglia + ", …»). Diverso da Parla, che ascolta una frase sola. Serve Parakeet (la luce bianca).";
 
     static string TestoPermesso(bool acceso) => acceso
         ? "Permesso del PC acceso: apro un programma dopo il tuo sì, apro le cartelle, cambio il volume e guardo lo schermo. Non clicco e non scrivo. Un clic per spegnerlo."
         : "Permesso del PC spento: non tocco niente fuori dal mio mondo. Un clic per accenderlo.";
 
-    void AggiornaServizi()
-    {
-        var accesi = _ponte.Regista.Accesi;
-        Accendi(_chipAscolto, _ponte.StaAscoltando || _ponte.Stato == StatoCompagno.Ascolta || _ponte.Udito.Accese);
-        Accendi(_chipD1, accesi.Contains(RuoloModello.D1));
-        Accendi(_chipVoce, accesi.Contains(RuoloModello.Omni) || _ponte.Stato == StatoCompagno.Parla);
-        Accendi(_chipMani, accesi.Contains(RuoloModello.Mani));
-        Accendi(_chipVl, accesi.Contains(RuoloModello.Vl));
-        Accendi(_chipPc, _ponte.Impostazioni.PermessoPc);
-    }
-
-    static void Accendi(Border chip, bool acceso)
-    {
-        chip.Opacity = acceso ? 1 : 0.28;
-        chip.Background = acceso ? Stile.Pennello("#221f2a") : Brushes.Transparent;
-    }
+    void AggiornaServizi() => AggiornaLuci();
 
     void MostraTasti()
     {
@@ -487,30 +643,6 @@ public sealed class FinestraAvatar : Window
         _bolla.Show();
     }
 
-    static Border Chip(string nome, string colore)
-    {
-        var pennello = Stile.Pennello(colore);
-        return new Border
-        {
-            Child = new TextBlock { Text = nome, FontFamily = Stile.Testo, FontSize = 12, Foreground = pennello },
-            BorderBrush = pennello,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(6, 0, 6, 0),
-            Margin = new Thickness(2, 0, 2, 0),
-            Opacity = 0.28,
-            ToolTip = nome switch
-            {
-                "orecchio" => "Ascolto, microfono acceso.",
-                "d1" => "Decisione di d1, il modello che sceglie l'azione.",
-                "voce" => "Voce di Omni.",
-                "mani" => "Mani, LFM3-1.7B, per scrivere e compilare.",
-                "occhi" => "VL, per guardare le immagini.",
-                _ => "Permesso del PC acceso: le mani possono lavorare."
-            }
-        };
-    }
-
     void Menu()
     {
         var m = new ContextMenu { PlacementTarget = this, FontFamily = Stile.Testo };
@@ -527,18 +659,15 @@ public sealed class FinestraAvatar : Window
             catch (Exception e) { MostraBolla("Questo fallo tu: non sono riuscito a aggiornare. " + e.Message); }
         });
         m.Items.Add(new Separator());
-        Voce("Parla", () => _ponte.AlternaAscolto());
-        Voce("Chat", () => ApriCasa());
-        Voce("Creazioni", () => ApriCasa().MostraCreazioni());
-        Voce(_ponte.Udito.Accese ? "Orecchie sì" : "Orecchie", () => _ = _ponte.AlternaOrecchie());
-        Voce(_ponte.Udito.InChiamata ? "Esci dalla chiamata" : "Chiamata", () => _ = _ponte.AlternaChiamata());
-        Voce(_ponte.Impostazioni.PermessoPc ? "Permesso sì" : "Permesso", () => _ponte.AlternaPermesso());
+        Voce("Chat", () => ApriCasa().ModoChat());
+        Voce("Mondo", () => ApriCasa().ModoMondo());
+        Voce("Nota veloce", ChiediNota);
+        Voce("Un pensiero adesso", () => _ = _ponte.PensieroAdesso());
+        Voce(_ponte.Udito.Accese ? "Spegni le Orecchie" : "Accendi le Orecchie", () => _ = _ponte.AlternaOrecchie());
+        Voce(_ponte.Impostazioni.PermessoPc ? "Spegni le mani sul PC" : "Accendi le mani sul PC", () => _ponte.AlternaPermesso());
+        Voce(_ponte.Regista.InPausa ? "Riprendi (togli la pausa)" : "Pausa", () => _ = _ponte.AlternaPausa());
+        Voce(_ponte.Dormita is null ? "Dormi" : "Sveglia", () => _ponte.AlternaSonno());
         Voce("STOP", () => _ponte.Stop());
-        Voce(_ponte.Stato == StatoCompagno.Dorme ? "Sveglia" : "Dormi", () =>
-        {
-            if (_ponte.Stato == StatoCompagno.Dorme) _ponte.ImpostaStato(StatoCompagno.Sveglio);
-            else _ponte.Stop();
-        });
         Voce("Impostazioni", () => new FinestraImpostazioni(_ponte).ShowDialog());
         Voce("Trasformati", Trasforma);
         m.Items.Add(new Separator());
@@ -596,8 +725,11 @@ public sealed class FinestraBolla : Window
             foreach (var scelta in scelte)
             {
                 var bottone = Stile.Icona(scelta.Etichetta, scelta.Etichetta, principale: scelta.Etichetta is "Sì" or "Segna");
-                bottone.FontFamily = Stile.Testo;
-                bottone.FontSize = 15;
+                if (char.IsLetter(scelta.Etichetta[0]))
+                {
+                    bottone.FontFamily = Stile.Testo;
+                    bottone.FontSize = 15;
+                }
                 var presa = scelta;
                 bottone.Click += (_, _) =>
                 {

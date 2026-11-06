@@ -50,6 +50,48 @@ public sealed class Regista : IRegista
 
     public string? UltimoErrore { get; private set; }
 
+    /// <summary>
+    /// In pausa non carica niente da solo: restano accesi solo i modelli che accendi tu (le luci sull'avatar).
+    /// Così un modello non entra in memoria all'improvviso.
+    /// </summary>
+    public bool InPausa { get; private set; }
+
+    /// <summary>Un modello si è acceso o spento: le luci si aggiornano.</summary>
+    public event Action? AccesiCambiati;
+
+    void Avvisa()
+    {
+        try { AccesiCambiati?.Invoke(); }
+        catch { /* chi ascolta si sta chiudendo */ }
+    }
+
+    public async Task ImpostaPausa(bool pausa)
+    {
+        InPausa = pausa;
+        if (pausa) await ScaricaTutto(CancellationToken.None).ConfigureAwait(false);
+        _registro.Scrivi("pausa", pausa ? "in pausa: niente si carica da solo, modelli scaricati" : "pausa tolta", "ok");
+        Avvisa();
+    }
+
+    /// <summary>Accende un modello perché l'hai chiesto tu (anche in pausa). Mai più di due: se serve ne spegne uno.</summary>
+    public async Task<bool> AccendiManuale(RuoloModello ruolo, CancellationToken ct)
+    {
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false)) return false;
+        try { return await AssicuraInterno([ruolo], legati.Token, manuale: true).ConfigureAwait(false); }
+        finally { _porta.Release(); }
+    }
+
+    /// <summary>Spegne un solo modello.</summary>
+    public async Task SpegniManuale(RuoloModello ruolo, CancellationToken ct)
+    {
+        if (!_accesi.Contains(ruolo)) return;
+        using var legati = CancellationTokenSource.CreateLinkedTokenSource(ct, _operazioni.Token);
+        if (!await _porta.WaitAsync(TimeSpan.FromSeconds(3), legati.Token).ConfigureAwait(false)) return;
+        try { await ScaricaUno(ruolo, legati.Token).ConfigureAwait(false); }
+        finally { _porta.Release(); }
+    }
+
     /// <summary>Cosa ha trovato nella cartella del motore: eseguibile, cartella dei modelli e GGUF.</summary>
     public Rilevazione Rilevazione => _rilevazione;
 
@@ -91,6 +133,7 @@ public sealed class Regista : IRegista
         _processo = null;
         _avviatoDaNoi = false;
         _accesi.Clear();
+        Avvisa();
     }
 
     /// <summary>Chiude llama-server in ascolto sulla nostra porta, anche se non l'abbiamo avviato noi.</summary>
@@ -141,10 +184,16 @@ public sealed class Regista : IRegista
         finally { _porta.Release(); }
     }
 
-    async Task<bool> AssicuraInterno(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct)
+    async Task<bool> AssicuraInterno(IReadOnlyList<RuoloModello> ruoli, CancellationToken ct, bool manuale = false)
     {
         foreach (var r in ruoli.Distinct())
             if (!Presente(r)) return false;
+        if (InPausa && !manuale)
+        {
+            if (ruoli.All(_accesi.Contains)) return true;
+            UltimoErrore = "sono in pausa (⏸): non carico modelli da solo. Togli la pausa, o accendi tu il modello dalla sua luce sull'avatar";
+            return false;
+        }
         if (!await Garantito(ct)) return false;
         var piano = PoliticaCarico.Calcola(_accesi, ruoli);
         foreach (var spegni in piano.Spegni)
@@ -332,6 +381,7 @@ public sealed class Regista : IRegista
         _cliente?.Dispose();
         _cliente = null;
         _accesi.Clear();
+        Avvisa();
         if (_rilevazione.Eseguibile is null)
         {
             UltimoErrore = "non trovo llama-server in " + _imp.CartellaMotore;
@@ -424,6 +474,7 @@ public sealed class Regista : IRegista
         }
         UltimoErrore = null;
         _accesi.Add(ruolo);
+        Avvisa();
         var fileSlot = Path.Combine(Percorsi.Slot(_radiceDati), slot);
         if (File.Exists(fileSlot))
         {
@@ -443,6 +494,7 @@ public sealed class Regista : IRegista
         try { await _cliente.Scarica(id, ct).ConfigureAwait(false); }
         catch (Exception e) { _registro.SegnaErrore("scarico " + id + ": " + e.Message); }
         _accesi.Remove(ruolo);
+        Avvisa();
         _registro.Scrivi("modello", "scaricato " + NomiModello.Etichetta(ruolo), "ok", ruolo.ToString());
     }
 

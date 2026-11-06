@@ -1,5 +1,36 @@
 # Novità
 
+## 0.6.0
+
+### Novità
+
+- **Le luci dei modelli** sotto l'avatar, una per modello. Piena: acceso. Vuota: spento. Tratteggiata: da scaricare. Passandoci sopra dice nome, a cosa serve e cosa fa il clic; il clic accende, spegne o scarica (dopo il tuo sì).
+- **⏸ Pausa**: scarica i modelli e non ne carica più da solo. L'avatar diventa in bianco e nero. I modelli li accendi tu dalle luci.
+- **Tasti dell'avatar con il nome sotto**, e meno: Chat, Mondo, Parla, Orecchie, Dormi, Mani, Pausa, Impostazioni, STOP. Via «che ore sono» e il tasto della chiamata.
+- **Mondo** apre solo il mondo, grande; **Chat** apre la chat.
+- **Discord da solo**: con le Orecchie accese, se Discord è aperto lo sente a parte, senza tasto.
+- **Dormire lo decidi tu**, senza orari: sceglie lui quanto (al massimo 2 ore), te lo dice, e intanto **sogna spesso** e te lo fa vedere. Alla sveglia scrive il diario e conta la dormita completa.
+- **👍 e 👎** su chat, pensieri e sogni: non risponde, li tiene per allenarsi (`palestra/voti.jsonl`).
+- **Pensieri da 10 secondi a 2 ore.**
+- **Impostazioni rifatte**: barra DaProd come la chat, schede a sinistra, una schermata per scheda, più compatte e meno simili a Capri. Dentro c'è tutto: carattere e file da personalizzare, voce, orecchie, pensieri e sonno, avatar (oggetto, grandezza, pausa), modelli, motore, sicurezza, strumenti.
+- **Modelli in una tabella**: una riga per modello, tutto in una schermata, con Accendi/Spegni, Scarica ed Elimina.
+
+### Correzioni
+
+- **La chat non si incastra più sulla stessa frase**: se la risposta è uguale a una delle ultime, riprova senza la storia e con più fantasia; se insiste, svuota la conversazione e te lo dice. Omni non risponde più a temperatura zero.
+- «Cosa sai fare?» ha una risposta vera, scritta dal programma: quello che sa fare davvero adesso.
+- Le regole di sicurezza non finiscono più nelle risposte come frasi ripetute.
+- Aprire la chat non sveglia più chi dorme per finta: «dorme» ora vuol dire che sta dormendo davvero.
+
+### Da provare
+
+- Scrivi «ciao», poi «cosa puoi fare», poi «in che modo», poi «spiegati meglio»: le risposte devono essere diverse.
+- Passa il mouse sulle luci sotto l'avatar: ogni luce dice cosa è. Clicca la luce di LFM3-1.7B: si accende (piena), poi un altro clic la spegne.
+- Premi ⏸ Pausa: l'avatar diventa in bianco e nero. Scrivi in chat: deve dire che è in pausa. Accendi Omni dalla sua luce e riscrivi: risponde. Premi ▶ Riprendi.
+- Premi 🌙 Dormi: deve dire quanto dorme e a che ora si sveglia. Aspetta un sogno nel fumetto, metti 👍. Premi ☀ Sveglia: deve dire che non conta come completa.
+- Impostazioni: ogni scheda sta in una schermata, senza scorrere. In Modelli vedi tutti i modelli insieme.
+- Con le Orecchie accese apri Discord: nel tooltip di 👂 deve comparire «Discord a parte».
+
 ## 0.5.0
 
 ### Novità

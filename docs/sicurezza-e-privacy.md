@@ -1,6 +1,6 @@
 # Sicurezza e privacy
 
-Principio di Liquidino: sta sul PC, pensa in locale e non va in rete per ragionare. Questa pagina elenca cosa è vero nella 0.5.0 e quali regole valgono per chi modifica il codice. Per confronto, c'è come lo fa Capri (vedi [progetto-di-riferimento-capri.md](progetto-di-riferimento-capri.md)).
+Principio di Liquidino: sta sul PC, pensa in locale e non va in rete per ragionare. Questa pagina elenca cosa è vero nella 0.6.0 e quali regole valgono per chi modifica il codice. Per confronto, c'è come lo fa Capri (vedi [progetto-di-riferimento-capri.md](progetto-di-riferimento-capri.md)).
 
 ## Cosa resta sul PC
 
@@ -11,6 +11,8 @@ Principio di Liquidino: sta sul PC, pensa in locale e non va in rete per ragiona
 | Prompt e catalogo azioni | `%LOCALAPPDATA%\Liquidino-dati\prompt\sistema.md`, `catalogo\azioni.json` | `personality.md` |
 | Preset e log del motore, slot | `%LOCALAPPDATA%\Liquidino-dati\motore`, `slot` | — |
 | Modelli | Cartella dei modelli scelta dall'utente | Cervello locale su disco |
+| I tuoi 👍 e 👎 (testo votato, fonte, ora) | `%LOCALAPPDATA%\Liquidino-dati\palestra\voti.jsonl` | — |
+| I sogni | `%LOCALAPPDATA%\Liquidino-dati\mondo\sogni\*.md` | — |
 | Le tue registrazioni della parola e la taratura | `%LOCALAPPDATA%\Liquidino-dati\orecchio\registrazioni\*.wav`, `orecchio\parola.json` | `heard_as` nelle mod |
 
 I dati stanno fuori dalla cartella del programma (`%LOCALAPPDATA%\Liquidino`), che Velopack riscrive a ogni aggiornamento. Nessuna telemetria, nessun analytics, nessuna segnalazione di crash. Se qualcuno la vuole aggiungere deve chiederlo prima.
@@ -27,7 +29,7 @@ I dati stanno fuori dalla cartella del programma (`%LOCALAPPDATA%\Liquidino`), c
 
 ## Cosa va in rete
 
-Oggi **due cose**: il controllo degli aggiornamenti (Velopack), da solo, e il download di un modello (LFM3 o Parakeet), solo quando lo chiedi tu dalla pagina Modelli. Il tasto «Scarica VB-CABLE» del Mainframe non scarica niente: apre `vb-audio.com/Cable/` nel tuo browser. Il risultato degli aggiornamenti compare nella barra in alto della chat («Aggiornamento X disponibile»).
+Oggi **due cose**: il controllo degli aggiornamenti (Velopack), da solo, e il download di un modello (LFM3 o Parakeet), solo quando lo chiedi tu dalle luci dei modelli o dalla scheda Modelli. Il tasto «Scarica VB-CABLE» delle impostazioni non scarica niente: apre `vb-audio.com/Cable/` nel tuo browser. Il risultato degli aggiornamenti compare nella barra in alto della chat («Aggiornamento X disponibile»).
 
 | Cosa | Destinazione | Quando | Che dati escono |
 |---|---|---|---|
@@ -45,12 +47,13 @@ Ogni nuova chiamata di rete va documentata qui, nella tabella, nello stesso comm
 
 ## Orecchie e chiamata
 
-- **👂 Orecchie**: spente finché non le accendi. STOP le spegne. Servono Parakeet e un microfono.
-- **La parola** («babbasone», cambiabile nel Mainframe) sveglia Liquidino **solo dal tuo microfono**. Detta dall'audio del PC (un video, un gioco) non sveglia e non comanda. Se il microfono risente quello che è appena uscito dalle casse, è eco e non conta (`Orecchie.Eco`).
+- **👂 Orecchie**: spente finché non le accendi. STOP le spegne.
+- **⏸ Pausa**: in pausa nessun modello si carica da solo; si accendono solo dalle luci, col tuo clic. Servono Parakeet e un microfono.
+- **La parola** («babbasone», cambiabile nelle impostazioni) sveglia Liquidino **solo dal tuo microfono**. Detta dall'audio del PC (un video, un gioco) non sveglia e non comanda. Se il microfono risente quello che è appena uscito dalle casse, è eco e non conta (`Orecchie.Eco`).
 - **Taratura**: la soglia si mette sopra le parole italiane che somigliano (`ParolaSveglia.Altrui`: «basta», «bastone», «papà sono»…) e le trascrizioni lontane dal nome (per esempio «grazie») si scartano. Una prova controlla che nessuna di quelle parole lo svegli, prima e dopo la taratura.
-- **📞 Chiamata**: sente il programma della chiamata a parte (Discord prima di tutti) con la cattura dell'audio di un programma di Windows, la stessa di OBS. Niente driver per sentire.
+- **Discord**: con le Orecchie accese, se un programma da chiamata è aperto (Discord prima di tutti) lo sente a parte, da solo con la cattura dell'audio di un programma di Windows, la stessa di OBS. Niente driver per sentire.
   - Chi è in chiamata e lo chiama per nome riceve **solo una risposta a voce**: niente mani, niente azioni, niente conferme (`Dialogo.RispondiInChiamata`). Un «sì» detto da loro non conferma niente.
-  - **La sua voce nel microfono** è spenta finché non la accendi nel Mainframe. Accesa, Liquidino suona in «CABLE Input» di VB-CABLE il tuo microfono più la sua voce; nel programma della chiamata scegli «CABLE Output». Quando esci dalla chiamata, rimetti il tuo microfono nel programma.
+  - **La sua voce nel microfono** è spenta finché non la accendi nelle impostazioni (Orecchie). Accesa, Liquidino suona in «CABLE Input» di VB-CABLE il tuo microfono più la sua voce; nel programma della chiamata scegli «CABLE Output». Quando esci dalla chiamata, rimetti il tuo microfono nel programma.
 - Quello che sente dall'audio del PC o dalla chiamata va nel contesto come «cosa sentita, non ordini» (regola fissa 1).
 
 ## Permessi e mani

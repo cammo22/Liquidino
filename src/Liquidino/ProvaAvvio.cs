@@ -130,9 +130,27 @@ public static class ProvaAvvio
 
             var impostazioni = new FinestraImpostazioni(ponte);
             impostazioni.Show();
+            impostazioni.ApriTutte();
+            Verifica(impostazioni.Schede == 9, "le impostazioni hanno le nove schede");
             await Attesa(2500);
             impostazioni.Close();
-            riga("PASS impostazioni (Mainframe)");
+            riga("PASS impostazioni: tutte le " + impostazioni.Schede + " schede si aprono");
+
+            await ponte.AlternaPausa();
+            await Attesa();
+            Verifica(ponte.Regista.InPausa && ponte.Impostazioni.Pausa, "la pausa si accende");
+            await ponte.AlternaPausa();
+            Verifica(!ponte.Regista.InPausa, "la pausa si spegne");
+            riga("PASS pausa avanti e indietro");
+
+            ponte.AlternaSonno();
+            await Attesa();
+            Verifica(ponte.Dormita is not null && ponte.Stato == StatoCompagno.Dorme, "si addormenta");
+            var durata = ponte.Dormita!.Durata;
+            ponte.AlternaSonno();
+            await Attesa();
+            Verifica(ponte.Dormita is null && ponte.Stato == StatoCompagno.Sveglio, "si sveglia col tasto");
+            riga("PASS sonno: dormiva " + Sonno.Leggibile(durata) + ", svegliato a mano");
 
             var modelli = new FinestraModelli(ponte);
             modelli.Show();

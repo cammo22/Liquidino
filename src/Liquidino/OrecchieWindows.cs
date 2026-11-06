@@ -50,7 +50,7 @@ public sealed class OrecchieWindows : IDisposable
 
     public ParolaPersonale Parola => _parola;
 
-    /// <summary>Rilegge la parola (dopo una taratura o se l'hai cambiata nel Mainframe).</summary>
+    /// <summary>Rilegge la parola (dopo una taratura o se l'hai cambiata nelle impostazioni).</summary>
     public void RicaricaParola() => _parola = ParolaSveglia.Carica(_imp.ParolaSveglia);
 
     /// <summary>Mentre parla lui, il microfono non conta: la sua voce non diventa un comando.</summary>
@@ -78,7 +78,7 @@ public sealed class OrecchieWindows : IDisposable
         if (Accese) return "Le Orecchie sono già accese.";
         RicaricaParola();
         if (!ParakeetPresente)
-            return Testo.FalloTu("per le Orecchie mi serve Parakeet. Scaricalo dalla pagina Modelli (Mainframe → Modelli), poi riaccendile");
+            return Testo.FalloTu("per le Orecchie mi serve Parakeet. Scaricalo dalla luce bianca sotto l'avatar (o Impostazioni → Modelli), poi riaccendile");
         try { await Trascrittore().ConfigureAwait(false); }
         catch (Exception e)
         {
@@ -128,6 +128,7 @@ public sealed class OrecchieWindows : IDisposable
             return Testo.FalloTu(string.Join("; ", note));
         }
         Accese = true;
+        _guardaChiamata = new System.Threading.Timer(_ => ControllaChiamata(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
         _registro.Scrivi("orecchie", "accese" + (_mic is null ? "" : ", microfono") + (_pc is null ? "" : ", audio del PC"), "ok", "orecchie");
         Cambiate?.Invoke();
         var frase = _mic is null
@@ -177,7 +178,8 @@ public sealed class OrecchieWindows : IDisposable
                 }
                 var vecchiPc = attesa.Where(p => p.Fonte == FonteAscolto.Pc).SkipLast(3).ToList();
                 foreach (var v in vecchiPc) attesa.Remove(v);
-                var ordine = attesa.OrderBy(p => p.Fonte == FonteAscolto.Tu ? 1 : 0).ThenBy(p => p.Quando).ToList();
+                // Prima la chiamata, poi il PC (che contiene di nuovo la chiamata), per ultimo il microfono.
+                var ordine = attesa.OrderBy(p => p.Fonte switch { FonteAscolto.Chiamata => 0, FonteAscolto.Pc => 1, _ => 2 }).ThenBy(p => p.Quando).ToList();
                 attesa.Clear();
                 foreach (var pezzo in ordine)
                 {
@@ -190,6 +192,11 @@ public sealed class OrecchieWindows : IDisposable
                         _registro.SegnaErrore("trascrizione delle orecchie: " + e.Message);
                         continue;
                     }
+                    if (pezzo.Fonte == FonteAscolto.Chiamata && ParolaSveglia.Normalizza(testo).Length > 0)
+                    {
+                        _ultimaDallaChiamata = pezzo.Quando;
+                        if (!Logica.InChiamata) { Logica.InChiamata = true; Cambiate?.Invoke(); }
+                    }
                     var decisione = Logica.Sentito(pezzo.Fonte, pezzo.Chi, testo, pezzo.Quando);
                     if (decisione.Cosa != CosaFare.Niente) Decisione?.Invoke(decisione, pezzo.Fonte, pezzo.Chi);
                 }
@@ -199,85 +206,79 @@ public sealed class OrecchieWindows : IDisposable
         catch (Exception e) { _registro.SegnaErrore("orecchie: " + e.Message); }
     }
 
-    /// <summary>
-    /// Modalità chiamata: sente il programma della chiamata a parte (Discord prima di tutti), e se l'hai acceso
-    /// mette la sua voce nel tuo microfono attraverso VB-CABLE. Ritorna la frase da dire.
-    /// </summary>
-    public async Task<string> ApriChiamata()
-    {
-        if (InChiamata) return "Sono già in chiamata su " + NomeChiamata + ".";
-        if (!Accese)
-        {
-            var acceso = await Accendi().ConfigureAwait(false);
-            if (!Accese) return acceso;
-        }
-        var processi = new List<(int, string)>();
-        foreach (var p in Process.GetProcesses())
-        {
-            try { processi.Add((p.Id, p.ProcessName)); }
-            catch { /* processo già chiuso */ }
-            finally { p.Dispose(); }
-        }
-        if (AppChiamata.Scegli(processi) is not { } app)
-            return Testo.FalloTu("non trovo Discord aperto. Apri Discord, entra nella chiamata e premi di nuovo 📞");
+    System.Threading.Timer? _guardaChiamata;
+    DateTimeOffset _ultimaDallaChiamata = DateTimeOffset.MinValue;
+    int _controllo;
 
-        // L'audio di tutto il PC conterrebbe anche la chiamata due volte: durante la chiamata si sente solo lei.
-        _pc?.Dispose();
-        _pc = null;
+    /// <summary>
+    /// Ogni 5 secondi guarda se c'è un programma da chiamata aperto (Discord prima di tutti). Se c'è, lo sente a parte,
+    /// e se hai acceso «la mia voce nel microfono» apre VB-CABLE. Niente tasto: fa da solo, finché le Orecchie sono accese.
+    /// È «in chiamata» solo se da lì sono arrivate voci negli ultimi 3 minuti.
+    /// </summary>
+    void ControllaChiamata()
+    {
+        if (Interlocked.Exchange(ref _controllo, 1) == 1) return;
         try
         {
-            var chiamata = await CatturaProcesso.Apri(app.Pid, includi: true, CancellationToken.None).ConfigureAwait(false);
-            var rilevatore = new RilevatoreVoce();
-            chiamata.Campioni16k += c => { foreach (var f in rilevatore.Aggiungi(c)) Metti(FonteAscolto.Chiamata, app.Nome, f); };
-            chiamata.Errore += e => _registro.SegnaErrore("audio della chiamata: " + e.Message);
-            chiamata.Avvia();
-            _chiamata = chiamata;
-        }
-        catch (Exception e)
-        {
-            _registro.SegnaErrore("audio della chiamata: " + e.Message);
-            if (_imp.AscoltaPc) await ApriPc().ConfigureAwait(false);
-            return Testo.FalloTu("non riesco a sentire " + app.Nome + ": " + e.Message);
-        }
-        NomeChiamata = app.Nome;
-        Logica.InChiamata = true;
-        var frase = "Sono in chiamata su " + app.Nome + ": sento loro e te. Se qualcuno mi chiama «" + _parola.Parola + "», rispondo a voce, ma le mani le comandi solo tu.";
-        if (_imp.VoceNelMicrofono)
-        {
-            var cavo = Dispositivi.Cavo();
-            if (cavo is null)
-                frase += " Questo fallo tu: per far sentire la mia voce agli altri serve VB-CABLE (Mainframe → Orecchie → Scarica VB-CABLE), poi riavvia il PC.";
-            else
+            if (!Accese) return;
+            if (Logica.InChiamata && DateTimeOffset.Now - _ultimaDallaChiamata > TimeSpan.FromMinutes(3))
+            {
+                Logica.InChiamata = false;
+                Cambiate?.Invoke();
+            }
+            var processi = new List<(int, string)>();
+            foreach (var p in Process.GetProcesses())
+            {
+                try { processi.Add((p.Id, p.ProcessName)); }
+                catch { /* processo già chiuso */ }
+                finally { p.Dispose(); }
+            }
+            var app = AppChiamata.Scegli(processi);
+            if (app is null)
+            {
+                if (_chiamata is not null)
+                {
+                    ChiudiPezziChiamata();
+                    _registro.Scrivi("chiamata", "il programma della chiamata si è chiuso", "ok", "chiamata");
+                    Cambiate?.Invoke();
+                }
+                return;
+            }
+            if (_chiamata is not null && NomeChiamata == app.Value.Nome) return;
+            ChiudiPezziChiamata();
+            try
+            {
+                var (pid, nome) = app.Value;
+                var chiamata = CatturaProcesso.Apri(pid, includi: true, CancellationToken.None).GetAwaiter().GetResult();
+                var rilevatore = new RilevatoreVoce();
+                chiamata.Campioni16k += c => { foreach (var f in rilevatore.Aggiungi(c)) Metti(FonteAscolto.Chiamata, nome, f); };
+                chiamata.Errore += e => _registro.SegnaErrore("audio della chiamata: " + e.Message);
+                chiamata.Avvia();
+                _chiamata = chiamata;
+                NomeChiamata = nome;
+                _registro.Scrivi("chiamata", "sento " + nome + " a parte", "ok", "chiamata");
+            }
+            catch (Exception e)
+            {
+                _registro.SegnaErrore("audio della chiamata: " + e.Message);
+                return;
+            }
+            if (_imp.VoceNelMicrofono && Dispositivi.Cavo() is { } cavo)
             {
                 try
                 {
                     Cavo = new VoceNelMicrofono(cavo) { Guadagno = _imp.VolumeVoceMicrofono / 100f };
                     if (_mic is not null) _mic.CampioniOriginali += AlCavo;
-                    frase += " La mia voce va anche nel microfono: in " + app.Nome + " scegli «CABLE Output» come microfono.";
                 }
-                catch (Exception e)
-                {
-                    _registro.SegnaErrore("voce nel microfono: " + e.Message);
-                    frase += " Questo fallo tu: «CABLE Input» non si apre (" + e.Message + ").";
-                }
+                catch (Exception e) { _registro.SegnaErrore("voce nel microfono: " + e.Message); }
             }
+            Cambiate?.Invoke();
         }
-        _registro.Scrivi("chiamata", "modalità chiamata accesa su " + app.Nome + (Cavo is null ? "" : ", voce nel microfono"), "ok", "chiamata");
-        Cambiate?.Invoke();
-        return frase;
+        catch (Exception e) { _registro.SegnaErrore("controllo della chiamata: " + e.Message); }
+        finally { Interlocked.Exchange(ref _controllo, 0); }
     }
 
     void AlCavo(float[] intrecciati, int frequenza, int canali) => Cavo?.DalMicrofono(intrecciati, frequenza, canali);
-
-    public async Task<string> ChiudiChiamata()
-    {
-        if (!InChiamata) return "Non ero in chiamata.";
-        ChiudiPezziChiamata();
-        if (Accese && _imp.AscoltaPc) await ApriPc().ConfigureAwait(false);
-        _registro.Scrivi("chiamata", "modalità chiamata spenta", "ok", "chiamata");
-        Cambiate?.Invoke();
-        return "Esco dalla chiamata. Ricordati di rimettere il tuo microfono vero nel programma, se avevi scelto CABLE Output.";
-    }
 
     void ChiudiPezziChiamata()
     {
@@ -302,6 +303,8 @@ public sealed class OrecchieWindows : IDisposable
     {
         var erano = Accese;
         Accese = false;
+        _guardaChiamata?.Dispose();
+        _guardaChiamata = null;
         ChiudiPezziChiamata();
         _mic?.Dispose();
         _mic = null;

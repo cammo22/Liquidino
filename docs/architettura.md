@@ -1,6 +1,6 @@
 # Architettura di Liquidino
 
-Stato: versione 0.5.0. Scritta leggendo il codice.
+Stato: versione 0.6.0. Scritta leggendo il codice.
 
 ## Stack
 
@@ -41,6 +41,7 @@ Stato: versione 0.5.0. Scritta leggendo il codice.
 | `Audio.cs` | `Wav` (leggi e scrivi), `Campioni` (16 kHz mono, ricampiona), `RilevatoreVoce` (frasi dall'energia, blocchi da 100 ms, fondo che si adatta), `Miscela` (voce sopra il microfono senza scatti). |
 | `ParolaSveglia.cs` | La parola («babbasone»): confronto tollerante sulle chiavi fonetiche, taratura sulle tue registrazioni, soglia sopra le parole italiane simili, eco (`Contenuto`). Salva `orecchio/parola.json`. |
 | `Trascrittore.cs` | `TrascrittoreParakeet`: Parakeet TDT 0.6B v3 int8 con sherpa-onnx, sulla CPU. `CatalogoOrecchio`: la sua scheda nella pagina Modelli. |
+| `Sonno.cs` | `Sonno`: quanto dorme (scelto da lui, massimo 2 ore), frasi, intervalli, sogni in `mondo/sogni`. `Palestra`: i 👍/👎 in `palestra/voti.jsonl`. |
 | `Udito.cs` | `Orecchie` decide cosa fare di ogni frase (comando tuo, nome da solo, chiamata, niente); `RegistroAscolto` tiene in memoria gli ultimi minuti; `AppChiamata` e `CavoVirtuale` scelgono Discord e VB-CABLE. |
 | `ImpostazioniUtente.cs`, `Percorsi.cs`, `Stato.cs`, `Semi.cs`, `Testo.cs`, `NoteRilascio.cs`, `ComandiLocali.cs` | Impostazioni (e copia di quelle rovinate), percorsi, stati, file di serie, frasi, note di rilascio, STOP. |
 
@@ -50,14 +51,15 @@ Stato: versione 0.5.0. Scritta leggendo il codice.
 |---|---|
 | `App.xaml.cs` | Avvio: Velopack, migrazione, primo avvio, misura del PC, finestre, aggiornamenti. Con `--prova-avvio` passa a `ProvaAvvio`. |
 | `Ponte.cs` | Tiene insieme finestre, regista, dialogo, ciclo e mani. Orologi del ciclo e della quiete, voce, prova di carico, diario di notte. |
-| `FinestraAvatar.cs` | Avatar, tasti, fumetto con Sì e No, menu, Ctrl+Spazio, trascinamento dei file. |
+| `FinestraAvatar.cs` | Avatar, luci dei modelli, tasti con nome, bianco e nero in pausa, fumetti con 👍/👎 e Sì/No, menu, Ctrl+Spazio, trascinamento dei file. |
 | `FinestraCasa.cs` | Chat e pannello del mondo (filtri, icone, anteprima, voti, rifacimento, diario). |
-| `FinestraImpostazioni.cs` | Il Mainframe: impostazioni e strumenti (prova del contesto, firewall, voce, dettagli errore). |
-| `FinestraModelli.cs` | La pagina Modelli: stato di ogni modello, Scarica (con domanda e avanzamento), Elimina (nel Cestino), tasti delle cartelle. |
+| `FinestraImpostazioni.cs` | Le impostazioni a schede, con la barra DaProd: Tu, Voce, Orecchie, Pensieri e sonno, Avatar, Modelli, Motore, Sicurezza, Strumenti. |
+| `Scaricamenti.cs` | Una strada sola per scaricare un modello (dalle luci o dalla tabella): domanda col peso, avanzamento, annulla. |
+| `FinestraModelli.cs` | `PannelloModelli`: la tabella compatta dei modelli (luce, nome, a cosa serve, stato, Accendi/Spegni, Scarica, Elimina), usata dalla finestra Modelli e dalla scheda Modelli delle impostazioni. |
 | `OrecchieWindows.cs` | Le Orecchie dell'app: microfono, audio del PC, chiamata, la fila per Parakeet, la voce nel microfono. |
 | `AudioWindows.cs` | `Dispositivi` (microfoni e uscite), `CatturaProcesso` (l'audio di un programma, o di tutto il PC tranne Liquidino, con `ActivateAudioInterfaceAsync`), `CatturaMicrofono`, `VoceNelMicrofono` (VB-CABLE). |
 | `FinestraParola.cs` | Registra la parola, mostra cosa ha capito Parakeet, tara. |
-| `Mainframe.cs` | I pezzi grafici del Mainframe: sezioni, righe, interruttori OFF/ON, selettori ◁ ▷, tasti, testata. Disegnati da noi. |
+| `Mainframe.cs` | I pezzi delle impostazioni in stile DaProd: sezioni, righe, interruttori a pillola, scelte a gettoni, barra crema. |
 | `ManiWindows.cs` | Le mani vere: programmi dal menu Start (shell `AppsFolder` e collegamenti `.lnk`), cartelle note, tasti del volume, foto dello schermo. |
 | `VoceWindows.cs`, `Firewall.cs` | Voci italiane di SAPI; regola del firewall con UAC. |
 | `ProvaAvvio.cs` | La prova di avvio della CI. |

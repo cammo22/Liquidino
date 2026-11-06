@@ -34,7 +34,6 @@ public sealed class CicloAutonomo
         if (!richiesto)
         {
             if (!_imp.CicloAutonomo) return new EsitoCiclo(false, "ciclo spento", null, null, false);
-            if (_imp.ENotte(ora)) return new EsitoCiclo(false, "è notte, dorme", null, null, false);
             if (pcOccupato) return new EsitoCiclo(false, "il PC è occupato", null, null, false);
         }
         if (_mondo.ByteTotali() > TettoByte)
@@ -100,9 +99,43 @@ public sealed class CicloAutonomo
         }
         _imp.CicliFatti++;
         _imp.Salva();
-        var parla = _imp.CompagniaVocale && (richiesto || _imp.CicliFatti % 2 == 0) && !_imp.ENotte(ora);
+        // Con pensieri molto fitti (meno di 5 minuti) non legge ad alta voce: solo il fumetto.
+        var parla = _imp.CompagniaVocale && (richiesto || (_imp.CicliFatti % 2 == 0 && _imp.CicloSecondi >= 300));
         _registro.Scrivi("ciclo", (amicizia ? "amicizia: " : "libero: ") + Path.GetFileName(nota.Percorso), "ok", "crea_nota");
         return new EsitoCiclo(true, "nota scritta", testo, nota.Percorso, parla);
+    }
+
+    /// <summary>
+    /// Un sogno mentre dorme: ripensa alla giornata e a quello che sa di te, in una o due frasi, diverso dagli ultimi.
+    /// Null se non c'è un modello per sognare (o se è in pausa): allora non finge.
+    /// </summary>
+    public async Task<string?> Sogna(Dormita dormita, Diario.Conti oggi, CancellationToken ct)
+    {
+        var ruolo = _regista.Presente(RuoloModello.Mani) ? RuoloModello.Mani
+            : _regista.Presente(RuoloModello.Omni) ? RuoloModello.Omni : (RuoloModello?)null;
+        if (ruolo is null || !_regista.MotorePresente) return null;
+        try
+        {
+            if (!await _regista.Assicura([ruolo.Value], ct)) return null;
+            var memoria = _mondo.LeggiMemoria();
+            if (memoria.Length > 800) memoria = memoria[..800];
+            var utente = string.IsNullOrWhiteSpace(_imp.NomeUtente) ? "il tuo amico" : _imp.NomeUtente;
+            var ultimi = dormita.Sogni.TakeLast(3).ToList();
+            var domanda = "Stai dormendo e sogni. Oggi con " + utente + ": " + oggi.Turni + " frasi, " + oggi.Note + " note, " + oggi.Pensieri + " pensieri, " + oggi.Gesti + " cose sul PC.\n" +
+                          (memoria.Trim().Length > 0 ? "Quello che sai di " + utente + ":\n" + memoria.Trim() + "\n" : "") +
+                          (ultimi.Count > 0 ? "Hai già sognato:\n" + string.Join("\n", ultimi.Select(u => "- " + u)) + "\nOra sogna un'altra cosa.\n" : "") +
+                          "Scrivi il sogno in una o due frasi in italiano, con carattere " + _imp.Carattere + ". Niente titolo, niente virgolette.";
+            var risp = await _regista.Completa(new RichiestaChat(
+                ruolo.Value, "Sei Liquidino e stai sognando. Scrivi solo il sogno.", [], domanda, null, null, null, null, 0.95, 120, true), ct);
+            var sogno = Testo.PulisciRisposta(risp?.Testo);
+            return sogno.Length >= 8 ? sogno : null;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e)
+        {
+            _registro.SegnaErrore("sogno: " + e.Message);
+            return null;
+        }
     }
 
     /// <summary>I pensieri che hanno avuto 👍, come esempio di tono. Non si copiano: si scrive di nuovo.</summary>
